@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 .env
 
@@ -15,3 +16,14 @@ node_modules
 
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
+=======
+# For projects that use the Waf build system: https://waf.io/
+# Dot-hidden on Unix-like systems
+.waf-*-*/
+.waf3-*-*/
+# Hidden directory on Windows (no dot)
+waf-*-*/
+waf3-*-*/
+# Lockfile
+.lock-waf_*_build
+>>>>>>> 8dda6930dc5d7eb79af84dbdf1e03c01d6f766b7
