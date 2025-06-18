@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./EScrow.sol";
+import "./Escrow.sol";
 
 contract OrderManager {
-    EScrow public escrow;
+    Escrow public escrow;
 
 
     enum OrderStatus { None, Created, Cancelled }
