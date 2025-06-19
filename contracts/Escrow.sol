@@ -1,110 +1,166 @@
 // SPDX-License-Identifier: MIT
-
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Escrow is Ownable {
-    IERC20 public stablecoin;
-    uint256 public platformFee = 75; // 0.75% in basis points
+contract Escrow is ReentrancyGuard, Ownable {
+    IERC20 public token;
     address public feeCollector;
-
-    struct EscrowInfo {
-        address buyer;
-        address seller;
+    uint256 public feePercentage = 100; // 1% (100 basis points)
+    
+    struct EscrowData {
         uint256 amount;
-        uint256 deadline;
+        address seller;
+        address buyer;
         bool released;
+        bool disputed;
+        string description;
+        uint256 deadline;
+        bool refunded;
     }
-
-    mapping(uint256 => EscrowInfo) public escrows;
-
-    event FundsLocked(uint256 indexed orderId, address indexed buyer, address indexed seller, uint256 amount, uint256 deadline);
-    event FundsReleased(uint256 indexed orderId, address indexed seller, uint256 amount, uint256 fee);
-    event FundsRefunded(uint256 indexed orderId, address indexed buyer, uint256 amount);
-
-    constructor(address _stablecoin, address _feeCollector) Ownable(msg.sender) {
-        require(_stablecoin != address(0), "Invalid token address");
-        require(_feeCollector != address(0), "Invalid fee collector");
-        stablecoin = IERC20(_stablecoin);
+    
+    mapping(uint256 => EscrowData) public escrows;
+    uint256 public escrowCounter;
+    
+    event EscrowCreated(uint256 indexed escrowId, address indexed seller, address indexed buyer, uint256 amount);
+    event EscrowReleased(uint256 indexed escrowId);
+    event EscrowDisputed(uint256 indexed escrowId);
+    event FundsLocked(uint256 indexed orderId, address indexed seller, uint256 amount, uint256 deadline);
+    event FundsRefunded(uint256 indexed orderId, address indexed seller, uint256 amount);
+    
+    constructor(address _token, address _feeCollector) Ownable(msg.sender) {
+        token = IERC20(_token);
         feeCollector = _feeCollector;
     }
-
-    function lockFunds(
-        uint256 orderId,
-        address seller,
-        uint256 amount,
-        uint256 deadline
-    ) external {
-        require(!escrows[orderId].released, "Order already used");
-        require(amount > 0, "Amount must be > 0");
-        require(deadline > block.timestamp, "Deadline must be in the future");
-
-        bool success = stablecoin.transferFrom(msg.sender, address(this), amount);
-        require(success, "Transfer failed");
-
-        escrows[orderId] = EscrowInfo({
-            buyer: msg.sender,
-            seller: seller,
+    
+    // Add the missing lockFunds function
+    function lockFunds(uint256 orderId, address seller, uint256 amount, uint256 deadline) external {
+        require(amount > 0, "Amount must be greater than 0");
+        require(seller != address(0), "Invalid seller address");
+        require(deadline > block.timestamp, "Invalid deadline");
+        
+        // Transfer tokens from seller to contract
+        require(token.transferFrom(seller, address(this), amount), "Token transfer failed");
+        
+        // Store the escrow data using orderId
+        escrows[orderId] = EscrowData({
             amount: amount,
+            seller: seller,
+            buyer: address(0), // Buyer not set yet
+            released: false,
+            disputed: false,
+            description: "",
             deadline: deadline,
-            released: false
+            refunded: false
         });
         
-        emit FundsLocked(orderId, msg.sender, seller, amount, deadline);
+        emit FundsLocked(orderId, seller, amount, deadline);
     }
-
-
-    function confirmDelivery(uint256 orderId) external {
-        EscrowInfo storage info = escrows[orderId];
-        require(!info.released, "Already released");
-        require(msg.sender == info.buyer, "Only buyer can confirm");
-        require(info.amount > 0, "No funds");
-
-        uint256 feeAmount = (info.amount * platformFee) / 10000;
-        uint256 payout = info.amount - feeAmount;
-        info.released = true;
-
-        require(stablecoin.transfer(info.seller, payout), "Payout failed");
-        require(stablecoin.transfer(feeCollector, feeAmount), "Fee transfer failed");
-
-        emit FundsReleased(orderId, info.seller, payout, feeAmount);
+    
+    // Add the missing refund function
+    function refund(uint256 orderId) external nonReentrant {
+        EscrowData storage escrow = escrows[orderId];
+        require(escrow.amount > 0, "Escrow does not exist");
+        require(!escrow.released, "Already released");
+        require(!escrow.refunded, "Already refunded");
+        require(!escrow.disputed, "Escrow is disputed");
+        require(block.timestamp >= escrow.deadline, "Deadline not reached");
+        
+        escrow.refunded = true;
+        
+        // Refund tokens to seller
+        require(token.transfer(escrow.seller, escrow.amount), "Refund transfer failed");
+        
+        emit FundsRefunded(orderId, escrow.seller, escrow.amount);
     }
-
-    function refund(uint256 orderId) external {
-        EscrowInfo storage info = escrows[orderId];
-        require(!info.released, "Already released");
-        require(info.amount > 0, "No funds");
-        require(block.timestamp >= info.deadline, "Deadline not reached");
-
-        uint256 refundAmount = info.amount;
-        info.released = true;
-
-        require(stablecoin.transfer(info.buyer, refundAmount), "Refund failed");
-
-        emit FundsRefunded(orderId, info.buyer, refundAmount);
+    
+    function createEscrow(uint256 amount, address buyer, string memory description) external returns (uint256) {
+        require(amount > 0, "Amount must be greater than 0");
+        require(buyer != address(0), "Invalid buyer address");
+        require(buyer != msg.sender, "Buyer cannot be seller");
+        
+        // Transfer tokens from seller to contract
+        require(token.transferFrom(msg.sender, address(this), amount), "Token transfer failed");
+        
+        uint256 escrowId = escrowCounter++;
+        escrows[escrowId] = EscrowData({
+            amount: amount,
+            seller: msg.sender,
+            buyer: buyer,
+            released: false,
+            disputed: false,
+            description: description,
+            deadline: 0,
+            refunded: false
+        });
+        
+        emit EscrowCreated(escrowId, msg.sender, buyer, amount);
+        return escrowId;
     }
-
-    function setPlatformFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 1000, "Fee too high"); // Max 10%
-        platformFee = newFee;
+    
+    function setBuyer(uint256 escrowId, address buyer) external {
+        EscrowData storage escrow = escrows[escrowId];
+        require(escrow.seller == msg.sender, "Only seller can set buyer");
+        require(escrow.buyer == address(0), "Buyer already set");
+        require(buyer != address(0), "Invalid buyer address");
+        require(buyer != escrow.seller, "Buyer cannot be seller");
+        
+        escrow.buyer = buyer;
     }
-
-    function setFeeCollector(address newCollector) external onlyOwner {
-        require(newCollector != address(0), "Invalid address");
-        feeCollector = newCollector;
+    
+    function releaseEscrow(uint256 escrowId) external nonReentrant {
+        EscrowData storage escrow = escrows[escrowId];
+        require(escrow.seller == msg.sender, "Only seller can release");
+        require(!escrow.released, "Already released");
+        require(!escrow.disputed, "Escrow is disputed");
+        require(!escrow.refunded, "Already refunded");
+        require(escrow.buyer != address(0), "Buyer not set");
+        
+        escrow.released = true;
+        
+        // Calculate fee
+        uint256 fee = (escrow.amount * feePercentage) / 10000;
+        uint256 buyerAmount = escrow.amount - fee;
+        
+        // Transfer tokens
+        if (fee > 0) {
+            require(token.transfer(feeCollector, fee), "Fee transfer failed");
+        }
+        require(token.transfer(escrow.buyer, buyerAmount), "Buyer transfer failed");
+        
+        emit EscrowReleased(escrowId);
     }
-
-    function getEscrow(uint256 orderId) external view returns (
-        address buyer,
-        address seller,
-        uint256 amount,
-        uint256 deadline,
-        bool released
-    ) {
-        EscrowInfo storage info = escrows[orderId];
-        return (info.buyer, info.seller, info.amount, info.deadline, info.released);
+    
+    function disputeEscrow(uint256 escrowId) external {
+        EscrowData storage escrow = escrows[escrowId];
+        require(escrow.buyer == msg.sender || escrow.seller == msg.sender, "Not authorized");
+        require(!escrow.released, "Already released");
+        require(!escrow.refunded, "Already refunded");
+        require(!escrow.disputed, "Already disputed");
+        
+        escrow.disputed = true;
+        emit EscrowDisputed(escrowId);
+    }
+    
+    function getEscrow(uint256 escrowId) external view returns (EscrowData memory) {
+        return escrows[escrowId];
+    }
+    
+    function getEscrowCount() external view returns (uint256) {
+        return escrowCounter;
+    }
+    
+    // Admin functions
+    function setFeePercentage(uint256 _feePercentage) external onlyOwner {
+        require(_feePercentage <= 1000, "Fee too high"); // Max 10%
+        feePercentage = _feePercentage;
+    }
+    
+    function setFeeCollector(address _feeCollector) external onlyOwner {
+        require(_feeCollector != address(0), "Invalid address");
+        feeCollector = _feeCollector;
     }
 }
 

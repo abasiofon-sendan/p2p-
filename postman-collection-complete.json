@@ -1,0 +1,195 @@
+{
+  "info": {
+    "name": "P2P Smart Contract API - Complete",
+    "description": "Complete collection for testing P2P smart contract backend",
+    "version": "2.0.0"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Get Wallet Balance",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/wallet/balance/{{sellerAddress}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["wallet", "balance", "{{sellerAddress}}"]
+        }
+      }
+    },
+    {
+      "name": "Mint Test Tokens to Seller",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"to\": \"{{sellerAddress}}\",\n  \"amount\": 5000\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tokens/mint",
+          "host": ["{{baseUrl}}"],
+          "path": ["tokens", "mint"]
+        }
+      }
+    },
+    {
+      "name": "Mint Test Tokens to Buyer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"to\": \"{{buyerAddress}}\",\n  \"amount\": 3000\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tokens/mint",
+          "host": ["{{baseUrl}}"],
+          "path": ["tokens", "mint"]
+        }
+      }
+    },
+    {
+      "name": "Create Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": 1,\n  \"seller\": \"{{sellerAddress}}\",\n  \"amount\": 100,\n  \"deadline\": {{deadline}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/order/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["order", "create"]
+        }
+      }
+    },
+    {
+      "name": "Get Order Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/order/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["order", "1"]
+        }
+      }
+    },
+    {
+      "name": "Create Direct Escrow",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 50,\n  \"buyer\": \"{{buyerAddress}}\",\n  \"description\": \"Direct P2P trade - 50 USDT\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/escrow/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["escrow", "create"]
+        }
+      }
+    },
+    {
+      "name": "Get Escrow Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/escrow/0",
+          "host": ["{{baseUrl}}"],
+          "path": ["escrow", "0"]
+        }
+      }
+    },
+    {
+      "name": "Release Escrow",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/escrow/0/release",
+          "host": ["{{baseUrl}}"],
+          "path": ["escrow", "0", "release"]
+        }
+      }
+    },
+    {
+      "name": "Cancel Order (Refund)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/order/1/cancel",
+          "host": ["{{baseUrl}}"],
+          "path": ["order", "1", "cancel"]
+        }
+      }
+    },
+    {
+      "name": "Get Escrow Count",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/escrow/count",
+          "host": ["{{baseUrl}}"],
+          "path": ["escrow", "count"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "sellerAddress",
+      "value": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    {
+      "key": "buyerAddress",
+      "value": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    },
+    {
+      "key": "deadline",
+      "value": "1751241600"
+    }
+  ]
+}
