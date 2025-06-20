@@ -6,7 +6,6 @@ import "./Escrow.sol";
 contract OrderManager {
     Escrow public escrow;
 
-
     enum OrderStatus { None, Created, Cancelled }
 
     struct Order {
@@ -16,9 +15,11 @@ contract OrderManager {
         uint256 amount;
         uint256 deadline;
         OrderStatus status;
+        uint256 escrowId;
     }
 
     mapping(uint256 => Order) public orders;
+    uint256 public orderCounter;
 
     event OrderCreated(uint256 indexed orderId, address buyer, address seller, uint256 amount, uint256 deadline);
     event OrderCancelled(uint256 indexed orderId, address buyer);
@@ -29,25 +30,28 @@ contract OrderManager {
     }
 
     function createOrder(
-        uint256 orderId,
         address seller,
         uint256 amount,
         uint256 deadline
     ) external {
-        require(orders[orderId].status == OrderStatus.None, "Order ID already exists");
-        require(deadline > block.timestamp, "Deadline must be in future");
+        require(seller != address(0), "Invalid seller");
+        require(amount > 0, "Amount must be greater than 0");
+        require(deadline > block.timestamp, "Invalid deadline");
 
-        // Call Escrow contract to lock funds
-        escrow.lockFunds(orderId, seller, amount, deadline);
+        uint256 orderId = orderCounter++;
 
-        // Record order
+        // Lock funds in escrow and get the escrow ID
+        uint256 escrowId = escrow.lockFunds(orderId, seller, amount, deadline);
+
+        // Record order with escrow ID
         orders[orderId] = Order({
             orderId: orderId,
             buyer: msg.sender,
             seller: seller,
             amount: amount,
             deadline: deadline,
-            status: OrderStatus.Created
+            status: OrderStatus.Created,
+            escrowId: escrowId
         });
 
         emit OrderCreated(orderId, msg.sender, seller, amount, deadline);
@@ -57,11 +61,10 @@ contract OrderManager {
         Order storage order = orders[orderId];
         require(order.status == OrderStatus.Created, "Not cancellable");
         require(msg.sender == order.buyer, "Only buyer can cancel");
-
         require(block.timestamp >= order.deadline, "Too early to cancel");
 
-        // Refund from Escrow
-        escrow.refund(orderId);
+        // Cancel the escrow using the stored escrow ID
+        escrow.cancelEscrow(order.escrowId);
 
         order.status = OrderStatus.Cancelled;
         emit OrderCancelled(orderId, msg.sender);
