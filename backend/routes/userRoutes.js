@@ -6,57 +6,42 @@ const User = require('../models/User');
 const router = express.Router();
 
 /**
- * @route   POST /api/users/register
- * @desc    Register a new user with wallet or email
- * @body    { "walletAddress": "0x...", "email": "user@example.com" (optional) }
+ * @route   POST /api/users/auth
+ * @desc    Login or Register a user with their wallet address
+ * @body    { "walletAddress": "0x..." }
  * @access  Public
  */
-router.post('/register', async (req, res) => {
+router.post('/auth', async (req, res) => {
     try {
-        const { walletAddress, email, firstName, lastName, phoneNumber } = req.body;
+        const { walletAddress } = req.body;
 
         // Validate wallet address
         if (!walletAddress || !ethers.isAddress(walletAddress)) {
-            return res.status(400).json({ message: 'Valid wallet address is required' });
+            return res.status(400).json({ message: 'A valid wallet address is required' });
         }
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ 
-            $or: [
-                { walletAddress: walletAddress.toLowerCase() },
-                ...(email ? [{ email: email.toLowerCase() }] : [])
-            ]
-        });
+        const lowercasedAddress = walletAddress.toLowerCase();
 
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists with this wallet or email' });
+        // Find user or create a new one if they don't exist
+        let user = await User.findOne({ walletAddress: lowercasedAddress });
+
+        if (!user) {
+            user = new User({ walletAddress: lowercasedAddress });
+            await user.save();
+            
+            // Return a 201 status for new user creation
+            return res.status(201).json({
+                message: 'User registered successfully',
+                user: {
+                    id: user._id,
+                    walletAddress: user.walletAddress,
+                }
+            });
         }
-
-        // Create new user
-        const userData = {
-            walletAddress: walletAddress.toLowerCase(),
-            firstName,
-            lastName,
-            phoneNumber
-        };
-
-        if (email) {
-            userData.email = email.toLowerCase();
-        }
-
-        const user = new User(userData);
-
-        // Generate email verification token if email provided
-        let verificationToken = null;
-        if (email) {
-            // verificationToken = user.generateEmailVerificationToken();
-            // TODO: Send verification email
-        }
-
-        await user.save();
-
-        res.status(201).json({
-            message: 'User registered successfully',
+        
+        // Return a 200 status for existing user login
+        res.status(200).json({
+            message: 'User logged in successfully',
             user: {
                 id: user._id,
                 walletAddress: user.walletAddress,
@@ -64,15 +49,15 @@ router.post('/register', async (req, res) => {
                 fullName: user.fullName,
                 isEmailVerified: user.isEmailVerified,
                 createdAt: user.createdAt
-            },
-            ...(verificationToken && { verificationToken }) // Only for testing
+            }
         });
 
     } catch (error) {
-        console.error('User registration failed:', error);
+        console.error('User authentication failed:', error);
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 });
+
 
 /**
  * @route   GET /api/users/profile/:walletAddress
