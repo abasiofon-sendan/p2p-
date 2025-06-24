@@ -1,10 +1,21 @@
-require('dotenv').config({path: '../.env'});
+// Load environment variables
+const dotenvResult = require('dotenv').config({path: '../.env'});
+if (dotenvResult.error) {
+    console.error('Error loading .env file:', dotenvResult.error);
+    process.exit(1);
+}
+
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
 // Initialize database connection
 const connectDB = require('./config/database');
 connectDB();
+
+mongoose.connection.on('error', (err) => {
+    console.error(`MongoDB connection error: ${err.message}`);
+});
 
 // Initialize blockchain service on startup
 require('./services/blockchainService');
