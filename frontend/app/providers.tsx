@@ -1,25 +1,15 @@
 "use client"
 
 import type React from "react"
+import { useReducer, createContext, useContext, type ReactNode, useCallback, useEffect } from "react"
+import { useToast } from "@/components/ui/use-toast"
 
-import { createContext, useContext, useReducer, useEffect, type ReactNode } from "react"
-import { useToast } from "@/hooks/use-toast"
-
-// Add ethereum to the window object type
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
-// Types
+// Define types for our state
 interface User {
   id: string
-  email: string
-  walletAddress?: string
-  kycStatus: "pending" | "verified" | "rejected"
-  rating: number
-  isAdmin: boolean
+  walletAddress: string
+  isAdmin?: boolean
+  kycStatus?: "unverified" | "pending" | "verified" | "rejected"
 }
 
 interface WalletBalance {
@@ -27,71 +17,81 @@ interface WalletBalance {
   usdc: number
 }
 
-interface Order {
+// New types for dashboard data
+interface DashboardStats {
+  rating: number
+  completedTrades: number
+  kycStatus: "unverified" | "pending" | "verified" | "rejected"
+}
+
+interface RecentTransaction {
   id: string
   type: "buy" | "sell"
-  currency: "USDT" | "USDC"
+  currency: string
   amount: number
-  rate: number
-  minLimit: number
-  maxLimit: number
-  status: "active" | "matched" | "completed" | "cancelled"
-  userId: string
-  createdAt: string
-  bankAccount?: string
+  status: string
+  date: string
+  counterparty: string
+}
+
+interface DashboardData {
+  stats: DashboardStats
+  balances: WalletBalance
+  recentTransactions: RecentTransaction[]
 }
 
 interface AppState {
-  user: User | null
   isAuthenticated: boolean
+  user: User | null
   walletBalance: WalletBalance
-  orders: Order[]
-  activeOrder: Order | null
   isLoading: boolean
+  dashboardData: DashboardData | null
 }
 
 type AppAction =
-  | { type: "SET_USER"; payload: User }
+  | { type: "LOGIN_SUCCESS"; payload: { user: User } }
   | { type: "LOGOUT" }
-  | { type: "SET_WALLET_BALANCE"; payload: WalletBalance }
-  | { type: "SET_ORDERS"; payload: Order[] }
-  | { type: "SET_ACTIVE_ORDER"; payload: Order | null }
+  | { type: "SET_USER"; payload: User }
   | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_DASHBOARD_DATA"; payload: DashboardData }
 
 const initialState: AppState = {
-  user: null,
   isAuthenticated: false,
+  user: null,
   walletBalance: { usdt: 0, usdc: 0 },
-  orders: [],
-  activeOrder: null,
   isLoading: false,
+  dashboardData: null,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "SET_USER":
-      return { ...state, user: action.payload, isAuthenticated: true }
+      return {
+        ...state,
+        isAuthenticated: true,
+        user: action.payload,
+      }
     case "LOGOUT":
-      return { ...state, user: null, isAuthenticated: false }
-    case "SET_WALLET_BALANCE":
-      return { ...state, walletBalance: action.payload }
-    case "SET_ORDERS":
-      return { ...state, orders: action.payload }
-    case "SET_ACTIVE_ORDER":
-      return { ...state, activeOrder: action.payload }
+      return {
+        ...initialState,
+      }
     case "SET_LOADING":
       return { ...state, isLoading: action.payload }
+    case "SET_DASHBOARD_DATA":
+      return { ...state, dashboardData: action.payload }
     default:
       return state
   }
 }
 
-const AppContext = createContext<{
+interface AppContextType {
   state: AppState
-  dispatch: React.Dispatch<AppAction>
   connectWallet: () => Promise<void>
   logout: () => void
-} | null>(null)
+  fetchDashboardData: (walletAddress: string) => Promise<void>
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined)
 
 export function Providers({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
@@ -147,6 +147,41 @@ export function Providers({ children }: { children: ReactNode }) {
     }
   }
 
+  const fetchDashboardData = useCallback(
+    async (walletAddress: string) => {
+      if (!walletAddress) return
+      dispatch({ type: "SET_LOADING", payload: true })
+      try {
+        const response = await fetch(`/api/users/dashboard/${walletAddress}`)
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to fetch dashboard data")
+        }
+
+        dispatch({ type: "SET_DASHBOARD_DATA", payload: data })
+        // Also update walletBalance in the main state for consistency elsewhere
+        dispatch({
+          type: "LOGIN_SUCCESS",
+          payload: {
+            user: state.user!,
+            walletBalance: data.balances,
+          },
+        })
+      } catch (error) {
+        const err = error as Error
+        toast({
+          title: "Dashboard Error",
+          description: err.message,
+          variant: "destructive",
+        })
+      } finally {
+        dispatch({ type: "SET_LOADING", payload: false })
+      }
+    },
+    [state.user, toast]
+  )
+
   const logout = () => {
     dispatch({ type: "LOGOUT" })
     toast({
@@ -192,9 +227,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const value = {
     state,
-    dispatch,
     connectWallet,
     logout,
+    fetchDashboardData,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
