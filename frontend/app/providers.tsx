@@ -5,6 +5,13 @@ import type React from "react"
 import { createContext, useContext, useReducer, useEffect, type ReactNode } from "react"
 import { useToast } from "@/hooks/use-toast"
 
+// Add ethereum to the window object type
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 // Types
 interface User {
   id: string
@@ -83,7 +90,6 @@ const AppContext = createContext<{
   state: AppState
   dispatch: React.Dispatch<AppAction>
   connectWallet: () => Promise<void>
-  login: (email: string, password: string) => Promise<void>
   logout: () => void
 } | null>(null)
 
@@ -92,6 +98,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const { toast } = useToast()
 
   const connectWallet = async () => {
+    dispatch({ type: "SET_LOADING", payload: true });
     try {
       if (typeof window.ethereum !== "undefined") {
         const accounts = await window.ethereum.request({
@@ -99,9 +106,26 @@ export function Providers({ children }: { children: ReactNode }) {
         })
 
         if (accounts.length > 0) {
+          const walletAddress = accounts[0];
+          
+          // Authenticate with the backend
+          const response = await fetch('/api/users/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walletAddress }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || 'Authentication failed');
+          }
+
+          dispatch({ type: "SET_USER", payload: data.user });
+
           toast({
             title: "Wallet Connected",
-            description: `Connected to ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`,
+            description: `Logged in as ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`,
           })
         }
       } else {
@@ -112,42 +136,14 @@ export function Providers({ children }: { children: ReactNode }) {
         })
       }
     } catch (error) {
+      const err = error as Error;
       toast({
         title: "Connection Failed",
-        description: "Failed to connect wallet",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const login = async (email: string, password: string) => {
-    dispatch({ type: "SET_LOADING", payload: true })
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const mockUser: User = {
-        id: "1",
-        email,
-        walletAddress: "0x1234...5678",
-        kycStatus: "verified",
-        rating: 4.8,
-        isAdmin: email.includes("admin"),
-      }
-
-      dispatch({ type: "SET_USER", payload: mockUser })
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-      })
-    } catch (error) {
-      toast({
-        title: "Login Failed",
-        description: "Invalid credentials",
+        description: err.message || "Failed to connect wallet",
         variant: "destructive",
       })
     } finally {
-      dispatch({ type: "SET_LOADING", payload: false })
+      dispatch({ type: "SET_LOADING", payload: false });
     }
   }
 
@@ -194,10 +190,17 @@ export function Providers({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_WALLET_BALANCE", payload: { usdt: 2500.5, usdc: 1800.25 } })
   }, [])
 
-  return <AppContext.Provider value={{ state, dispatch, connectWallet, login, logout }}>{children}</AppContext.Provider>
+  const value = {
+    state,
+    dispatch,
+    connectWallet,
+    logout,
+  }
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
-export function useApp() {
+export const useApp = () => {
   const context = useContext(AppContext)
   if (!context) {
     throw new Error("useApp must be used within Providers")
