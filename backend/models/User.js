@@ -30,6 +30,11 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    kycStatus: {
+        type: String,
+        enum: ['unverified', 'pending', 'verified', 'rejected'],
+        default: 'unverified'
+    },
     restrictionReason: {
         type: String,
         default: null

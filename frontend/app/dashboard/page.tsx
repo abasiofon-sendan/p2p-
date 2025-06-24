@@ -12,47 +12,37 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 
 export default function DashboardPage() {
-  const { state } = useApp()
+  const { state, fetchDashboardData } = useApp()
   const router = useRouter()
 
   useEffect(() => {
     if (!state.isAuthenticated) {
       router.push("/login")
+    } else if (state.user?.walletAddress && !state.dashboardData) {
+      fetchDashboardData(state.user.walletAddress)
     }
-  }, [state.isAuthenticated, router])
+  }, [state.isAuthenticated, state.user, state.dashboardData, router, fetchDashboardData])
 
-  if (!state.isAuthenticated) {
-    return null
+  if (!state.isAuthenticated || !state.dashboardData) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full">
+          <p>Loading dashboard...</p>
+        </div>
+      </DashboardLayout>
+    )
   }
 
-  const mockTransactions = [
-    {
-      id: "1",
-      type: "buy",
-      currency: "USDT",
-      amount: 500,
-      rate: 1.02,
-      status: "completed",
-      date: "2024-01-15",
-    },
-    {
-      id: "2",
-      type: "sell",
-      currency: "USDC",
-      amount: 300,
-      rate: 0.99,
-      status: "pending",
-      date: "2024-01-14",
-    },
-  ]
+  const { stats, balances, recentTransactions } = state.dashboardData
+  const walletAddress = state.user?.walletAddress || ""
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* Welcome Section */}
         <div>
-          <h1 className="text-3xl font-bold">Welcome back, {state.user?.email}</h1>
-          <p className="text-gray-600">Manage your trades and account settings</p>
+          <h1 className="text-3xl font-bold">Welcome Back</h1>
+          <p className="text-gray-600 truncate">{walletAddress}</p>
         </div>
 
         {/* Stats Cards */}
@@ -63,8 +53,7 @@ export default function DashboardPage() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${state.walletBalance.usdt.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+2.5% from last month</p>
+              <div className="text-2xl font-bold">${balances.usdt.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -74,8 +63,7 @@ export default function DashboardPage() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${state.walletBalance.usdc.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">+1.2% from last month</p>
+              <div className="text-2xl font-bold">${balances.usdc.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -85,8 +73,8 @@ export default function DashboardPage() {
               <Star className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{state.user?.rating}/5.0</div>
-              <p className="text-xs text-muted-foreground">Based on 24 trades</p>
+              <div className="text-2xl font-bold">{stats.rating}/5.0</div>
+              <p className="text-xs text-muted-foreground">Based on {stats.completedTrades} trades</p>
             </CardContent>
           </Card>
 
@@ -96,10 +84,10 @@ export default function DashboardPage() {
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Badge variant={state.user?.kycStatus === "verified" ? "default" : "secondary"}>
-                {state.user?.kycStatus}
+              <Badge variant={stats.kycStatus === "verified" ? "default" : "secondary"}>
+                {stats.kycStatus}
               </Badge>
-              <p className="text-xs text-muted-foreground mt-1">Identity verified</p>
+              <p className="text-xs text-muted-foreground mt-1">Identity verification</p>
             </CardContent>
           </Card>
         </div>
@@ -147,7 +135,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {mockTransactions.slice(0, 3).map((tx) => (
+                    {recentTransactions.slice(0, 3).map((tx) => (
                       <div key={tx.id} className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           {tx.type === "buy" ? (
@@ -163,8 +151,8 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium">${tx.amount}</p>
-                          <Badge variant={tx.status === "completed" ? "default" : "secondary"}>{tx.status}</Badge>
+                          <p className="text-sm font-medium">${tx.amount.toFixed(2)}</p>
+                          <Badge variant={tx.status === "Released" ? "default" : "secondary"}>{tx.status}</Badge>
                         </div>
                       </div>
                     ))}
@@ -182,7 +170,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockTransactions.map((tx) => (
+                  {recentTransactions.map((tx) => (
                     <div key={tx.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center space-x-4">
                         {tx.type === "buy" ? (
@@ -192,15 +180,15 @@ export default function DashboardPage() {
                         )}
                         <div>
                           <p className="font-medium">
-                            {tx.type === "buy" ? "Purchase" : "Sale"} - {tx.currency}
+                            {tx.type === "buy" ? "Purchase from" : "Sale to"} {`${tx.counterparty.slice(0, 6)}...`}
                           </p>
                           <p className="text-sm text-gray-500">
-                            Amount: ${tx.amount} • Rate: ${tx.rate}
+                            Amount: ${tx.amount.toFixed(2)}
                           </p>
                           <p className="text-xs text-gray-400">{tx.date}</p>
                         </div>
                       </div>
-                      <Badge variant={tx.status === "completed" ? "default" : "secondary"}>{tx.status}</Badge>
+                      <Badge variant={tx.status === "Released" ? "default" : "secondary"}>{tx.status}</Badge>
                     </div>
                   ))}
                 </div>
@@ -242,7 +230,7 @@ export default function DashboardPage() {
                 <CardDescription>Complete your identity verification</CardDescription>
               </CardHeader>
               <CardContent>
-                {state.user?.kycStatus === "verified" ? (
+                {stats.kycStatus === "verified" ? (
                   <div className="text-center py-8">
                     <Shield className="h-12 w-12 text-green-600 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-green-600">Verification Complete</h3>
@@ -253,7 +241,7 @@ export default function DashboardPage() {
                     <div className="text-center py-4">
                       <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium">Upload Documents</h3>
-                      <p className="text-gray-600">Please upload your ID and proof of address</p>
+                      <p className="text-gray-600">Your status is currently: {stats.kycStatus}</p>
                     </div>
                     <Button className="w-full">
                       <Upload className="mr-2 h-4 w-4" />
