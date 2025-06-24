@@ -80,7 +80,7 @@ const escrowSchema = new mongoose.Schema({
 });
 
 // Index for efficient queries
-escrowSchema.index({ escrowId: 1 });
+// escrowSchema.index({ escrowId: 1 });
 escrowSchema.index({ seller: 1 });
 escrowSchema.index({ buyer: 1 });
 escrowSchema.index({ released: 1 });

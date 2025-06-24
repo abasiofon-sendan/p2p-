@@ -49,7 +49,7 @@ router.post('/register', async (req, res) => {
         // Generate email verification token if email provided
         let verificationToken = null;
         if (email) {
-            verificationToken = user.generateEmailVerificationToken();
+            // verificationToken = user.generateEmailVerificationToken();
             // TODO: Send verification email
         }
 
