@@ -1,79 +1,56 @@
-const express = require('express');
-const Order = require('../models/Order');
+const mongoose = require('mongoose');
 
-const router = express.Router();
-
-// Get all orders
-router.get('/', async (req, res) => {
-    try {
-        const orders = await Order.find().sort({ createdAt: -1 });
-        res.json({
-            
-            success: true,
-            orders
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
+const orderSchema = new mongoose.Schema({
+    orderId: { // Optional: If you link to a smart contract order ID
+        type: String,
+        unique: true,
+        sparse: true, // Allows multiple documents to have a null value
+    },
+    orderType: {
+        type: String,
+        enum: ['buy', 'sell'],
+        required: true,
+    },
+    asset: {
+        type: String,
+        enum: ['USDT', 'USDC'],
+        required: true,
+    },
+    amount: { // Total amount of crypto for sale/purchase
+        type: Number,
+        required: true,
+    },
+    rate: { // Fiat price per unit of crypto
+        type: Number,
+        required: true,
+    },
+    minLimit: { // Minimum fiat amount for a trade
+        type: Number,
+        required: true,
+    },
+    maxLimit: { // Maximum fiat amount for a trade
+        type: Number,
+        required: true,
+    },
+    status: {
+        type: String,
+        enum: ['active', 'matched', 'completed', 'cancelled'],
+        default: 'active',
+    },
+    seller: { // The user who created the order
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
+    paymentMethods: [{ // List of accepted payment methods
+        type: String,
+    }],
+    paymentInstructions: {
+        type: String,
+        trim: true,
     }
+}, {
+    timestamps: true // Adds createdAt and updatedAt fields automatically
 });
 
-// Get order by ID
-router.get('/:id', async (req, res) => {
-    try {
-        const order = await Order.findOne({ orderId: req.params.id });
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
-        }
-
-        res.json({
-            success: true,
-            order
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-});
-
-// Create new order
-router.post('/', async (req, res) => {
-    try {
-        const { orderId, buyer, seller, amount, deadline, escrowId, description } = req.body;
-
-        const order = new Order({
-            orderId,
-            buyer,
-            seller,
-            amount,
-            deadline,
-            escrowId,
-            description
-        });
-
-        await order.save();
-
-        res.status(201).json({
-            success: true,
-            message: 'Order created successfully',
-            order
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
-    }
-});
-
-module.exports = router;
+module.exports = mongoose.model('Order', orderSchema);
