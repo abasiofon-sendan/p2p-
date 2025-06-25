@@ -1,8 +1,33 @@
 const express = require('express');
 const { ethers } = require('ethers');
 const { orderManagerContract, signer } = require('../services/blockchainService');
+const Order = require('../models/Order'); // Assuming you create an Order model
+const User = require('../models/User'); // To populate seller info
 
 const router = express.Router();
+
+/**
+ * @route   GET /api/orders
+ * @desc    Get all active sell orders for the marketplace
+ * @access  Public
+ */
+router.get('/', async (req, res) => {
+    try {
+        // Find active sell orders and populate seller's username and reputation
+        const orders = await Order.find({ status: 'active', orderType: 'sell' })
+            .populate({
+                path: 'seller',
+                select: 'username reputation completedTrades'
+            })
+            .sort({ rate: 1, createdAt: -1 }); // Sort by best rate, then newest
+
+        res.status(200).json(orders);
+    } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    }
+});
+
 
 /**
  * @route   POST /api/orders/create
