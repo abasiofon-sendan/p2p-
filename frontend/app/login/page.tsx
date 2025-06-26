@@ -37,7 +37,7 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-6 p-4">
-              <Wallet className="h-16 w-16 text-blue-600" />
+              <Wallet className="h-16 w-16 text-primary" />
               <Button
                 onClick={connectWallet}
                 className="w-full"

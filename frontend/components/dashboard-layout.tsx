@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { LayoutDashboard, TrendingUp, Plus, MessageSquare, Settings, LogOut, Wallet, Shield } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -36,10 +37,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">P2P</span>
-                </div>
-                <span className="text-xl font-bold">Exchange</span>
+                <Image src="/logo.png" alt="Logo" width={180} height={40} className="" />
               </Link>
             </div>
 

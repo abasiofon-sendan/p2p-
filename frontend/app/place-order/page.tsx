@@ -229,7 +229,7 @@ export default function PlaceOrderPage() {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Total Value:</span>
-                    <span className="text-xl font-bold text-blue-600">${calculateTotal()} USD</span>
+                    <span className="text-xl font-bold text-primary">${calculateTotal()} USD</span>
                   </div>
                 </div>
               )}
