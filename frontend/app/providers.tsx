@@ -109,7 +109,7 @@ export function Providers({ children }: { children: ReactNode }) {
           const walletAddress = accounts[0];
           
           // Authenticate with the backend
-          const response = await fetch('/api/users/auth', {
+          const response = await fetch('http://localhost:5000/api/users/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress }),
@@ -152,7 +152,7 @@ export function Providers({ children }: { children: ReactNode }) {
       if (!walletAddress) return
       dispatch({ type: "SET_LOADING", payload: true })
       try {
-        const response = await fetch(`/api/users/dashboard/${walletAddress}`)
+        const response = await fetch(`http://localhost:5000/api/users/dashboard/${walletAddress}`)
         const data = await response.json()
 
         if (!response.ok) {

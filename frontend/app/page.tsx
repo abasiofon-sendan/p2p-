@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowRight, Shield, Zap, Users, TrendingUp } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 
 export default function LandingPage() {
@@ -8,17 +9,14 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+        <div className=" mx-auto p-5 py-6 sm:px-10 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">P2P</span>
-            </div>
-            <span className="text-xl font-bold">Exchange</span>
+            <Link href="/" className="flex items-center space-x-2">
+                            <Image src="/logo.png" alt="Logo" width={180} height={40} className="" />
+            </Link>
           </div>
           <div className="space-x-4">
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
+            
             <Link href="/register">
               <Button>Get Started</Button>
             </Link>
@@ -30,7 +28,7 @@ export default function LandingPage() {
       <section className="container mx-auto px-4 py-20 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Trade USDT & USDC
-          <span className="text-blue-600 block">Peer-to-Peer</span>
+          <span className="text-[#30a57f] block">Peer-to-Peer</span>
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
           Secure, fast, and reliable P2P cryptocurrency exchange with built-in escrow protection. Trade directly with
@@ -38,15 +36,11 @@ export default function LandingPage() {
         </p>
         <div className="space-x-4">
           <Link href="/orders">
-            <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
+            <Button size="lg" className="bg-[#30a57f] text-white hover:border hover:border-[#30a57f] hover:text-[#30a57f]">
               Start Trading <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/register">
-            <Button size="lg" variant="outline">
-              Create Account
-            </Button>
-          </Link>
+         
         </div>
       </section>
 
@@ -56,7 +50,7 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader>
-              <Shield className="h-10 w-10 text-blue-600 mb-2" />
+              <Shield className="h-10 w-10 text-primary mb-2" />
               <CardTitle>Secure Escrow</CardTitle>
             </CardHeader>
             <CardContent>
@@ -97,7 +91,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-blue-600 text-white py-16">
+      <section className="bg-[#30a57f] text-white py-16">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Start Trading?</h2>
           <p className="text-xl mb-8 opacity-90">Join thousands of users already trading on our secure platform</p>
