@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus, Search, Star, DollarSign } from "lucide-react"
 import Link from "next/link"
+import { apiFetch } from "@/utils/api"
 
 // The Order interface should match the backend's response
 interface Order {
@@ -51,12 +52,7 @@ export default function OrdersPage() {
     const fetchOrders = async () => {
       setIsLoading(true)
       try {
-        // We only fetch sell orders for the marketplace
-        const response = await fetch("/api/orders?type=sell")
-        if (!response.ok) {
-          throw new Error("Failed to fetch orders")
-        }
-        const data = await response.json()
+        const data = await apiFetch("/api/orders?type=sell")
         setOrders(data)
       } catch (error) {
         console.error(error)
