@@ -42,10 +42,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <div className="flex items-center space-x-4">
-              <Button onClick={connectWallet} variant="outline" size="sm">
-                <Wallet className="h-4 w-4 mr-2" />
-                Connect Wallet
-              </Button>
               <div className="text-sm">
                 <p className="font-medium">{state.user?.email}</p>
                 <p className="text-gray-500">

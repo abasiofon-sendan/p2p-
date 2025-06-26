@@ -17,7 +17,7 @@ export default function LandingPage() {
           </div>
           <div className="space-x-4">
             
-            <Link href="/register">
+            <Link href="/login">
               <Button>Get Started</Button>
             </Link>
           </div>
@@ -50,7 +50,7 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader>
-              <Shield className="h-10 w-10 text-primary mb-2" />
+              <Shield className="h-10 w-10 text-[#30a57f] mb-2" />
               <CardTitle>Secure Escrow</CardTitle>
             </CardHeader>
             <CardContent>
@@ -95,9 +95,9 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Start Trading?</h2>
           <p className="text-xl mb-8 opacity-90">Join thousands of users already trading on our secure platform</p>
-          <Link href="/register">
+          <Link href="/login">
             <Button size="lg" variant="secondary">
-              Create Your Account Now
+              Get Started
             </Button>
           </Link>
         </div>
@@ -106,7 +106,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8">
         <div className="container mx-auto px-4 text-center">
-          <p>&copy; 2024 P2P Exchange. All rights reserved.</p>
+          <p>&copy; 2024 TradeAm. All rights reserved.</p>
         </div>
       </footer>
     </div>

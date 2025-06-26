@@ -17,6 +17,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, AlertCircle } from "lu
 import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useToast } from "@/hooks/use-toast"
+import { apiFetch } from "@/utils/api"
 
 export default function PlaceOrderPage() {
   const { state } = useApp()
@@ -85,16 +86,43 @@ export default function PlaceOrderPage() {
       return
     }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      // Prepare payload
+      const payload = {
+        orderType,
+        asset: currency,
+        amount: parseFloat(amount),
+        rate: parseFloat(rate),
+        minLimit: parseFloat(minLimit),
+        maxLimit: parseFloat(maxLimit),
+        seller: state.user?.id, // or walletAddress, depending on backend
+        paymentMethods: selectedPaymentMethods,
+        paymentInstructions: instructions,
+        bankAccount: selectedBankAccount,
+      }
 
-    toast({
-      title: "Order Created Successfully",
-      description: `Your ${orderType} order for ${currency} has been posted`,
-    })
+      // POST to backend
+      await apiFetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
-    setIsLoading(false)
-    router.push("/orders")
+      toast({
+        title: "Order Created Successfully",
+        description: `Your ${orderType} order for ${currency} has been posted`,
+      })
+
+      router.push("/orders")
+    } catch (error: any) {
+      toast({
+        title: "Order Creation Failed",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   if (!state.isAuthenticated) {
@@ -229,7 +257,7 @@ export default function PlaceOrderPage() {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Total Value:</span>
-                    <span className="text-xl font-bold text-primary">${calculateTotal()} USD</span>
+                    <span className="text-xl font-bold text-[#30a57f]">${calculateTotal()} USD</span>
                   </div>
                 </div>
               )}

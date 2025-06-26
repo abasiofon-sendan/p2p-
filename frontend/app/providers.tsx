@@ -97,6 +97,19 @@ export function Providers({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
   const { toast } = useToast()
 
+  // Restore user from localStorage on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser)
+        dispatch({ type: "SET_USER", payload: user })
+      } catch {
+        localStorage.removeItem("user")
+      }
+    }
+  }, [])
+
   const connectWallet = async () => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
@@ -122,6 +135,8 @@ export function Providers({ children }: { children: ReactNode }) {
           }
 
           dispatch({ type: "SET_USER", payload: data.user });
+          // Save user to localStorage
+          localStorage.setItem("user", JSON.stringify(data.user));
 
           toast({
             title: "Wallet Connected",
@@ -160,14 +175,12 @@ export function Providers({ children }: { children: ReactNode }) {
         }
 
         dispatch({ type: "SET_DASHBOARD_DATA", payload: data })
-        // Also update walletBalance in the main state for consistency elsewhere
-        dispatch({
-          type: "LOGIN_SUCCESS",
-          payload: {
-            user: state.user!,
-            walletBalance: data.balances,
-          },
-        })
+        // Optionally update walletBalance in user and localStorage if needed
+        if (state.user) {
+          const updatedUser = { ...state.user, walletBalance: data.balances }
+          dispatch({ type: "SET_USER", payload: updatedUser })
+          localStorage.setItem("user", JSON.stringify(updatedUser))
+        }
       } catch (error) {
         const err = error as Error
         toast({
@@ -184,6 +197,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const logout = () => {
     dispatch({ type: "LOGOUT" })
+    localStorage.removeItem("user")
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
