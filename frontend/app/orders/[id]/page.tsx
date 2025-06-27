@@ -1,50 +1,60 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import type React from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useApp } from "@/app/providers"
-import { useToast } from "@/components/ui/use-toast"
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, CheckCircle, CreditCard, DollarSign, AlertTriangle } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { ArrowLeft, Clock, User, Star, Shield, Building2, CreditCard } from "lucide-react"
 import Link from "next/link"
+import { DashboardLayout } from "@/components/dashboard-layout"
+import { useToast } from "@/hooks/use-toast"
+import { apiFetch } from "@/utils/api"
 
-// This should be a combination of Order and Escrow data
-interface TradeDetails {
+// Updated Order interface to include bank details
+interface Order {
   _id: string
+  orderId?: string
   orderType: "buy" | "sell"
   asset: "USDT" | "USDC"
   amount: number
   rate: number
   minLimit: number
   maxLimit: number
+  status: "active" | "matched" | "completed" | "cancelled"
   seller: {
-    username: string
+    _id: string
+    username?: string
+    reputation: number
+    completedTrades: number
+    walletAddress: string
   }
   paymentMethods: string[]
-  instructions: string
-  // Escrow-related fields, null if not yet initiated
-  escrowId?: string
-  escrowStatus?: "LOCKED" | "PAYMENT_SENT" | "RELEASED" | "DISPUTED"
-  buyerAddress?: string
+  paymentInstructions?: string
+  bankDetails: {
+    bankName: string
+    accountNumber: string
+    accountName: string
+  }
+  createdAt: string
 }
 
 export default function OrderDetailsPage() {
-  const { state, connectWallet } = useApp()
+  const { state } = useApp()
   const router = useRouter()
   const params = useParams()
   const { toast } = useToast()
-
-  const [trade, setTrade] = useState<TradeDetails | null>(null)
+  const [trade, setTrade] = useState<Order | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [buyAmountCrypto, setBuyAmountCrypto] = useState("")
-  const [buyAmountFiat, setBuyAmountFiat] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const orderId = params.id as string
+  const [buyAmountFiat, setBuyAmountFiat] = useState("")
+  const [buyAmountCrypto, setBuyAmountCrypto] = useState("")
 
   useEffect(() => {
     if (!state.isAuthenticated) {
@@ -52,196 +62,334 @@ export default function OrderDetailsPage() {
       return
     }
 
-    const fetchTradeDetails = async () => {
-      setIsLoading(true)
+    const fetchTrade = async () => {
       try {
-        // This endpoint should fetch order details and any existing escrow status
-        const response = await fetch(`/api/orders/${orderId}`)
-        if (!response.ok) throw new Error("Failed to fetch trade details")
-        const data = await response.json()
-        setTrade(data)
+        const orderData = await apiFetch(`/api/orders/${params.id}`)
+        setTrade(orderData)
       } catch (error) {
-        console.error(error)
-        toast({ title: "Error", description: "Could not load trade details.", variant: "destructive" })
+        console.error('Failed to fetch order:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load order details",
+          variant: "destructive",
+        })
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchTradeDetails()
-  }, [state.isAuthenticated, router, orderId, toast])
+    fetchTrade()
+  }, [params.id, state.isAuthenticated, router, toast])
 
-  const handleAmountChange = (value: string, type: "crypto" | "fiat") => {
+  const handleAmountChange = (value: string, type: "fiat" | "crypto") => {
     if (!trade) return
-    const numValue = parseFloat(value)
-    if (type === "crypto") {
-      setBuyAmountCrypto(value)
-      if (!Number.isNaN(numValue)) {
-        setBuyAmountFiat((numValue * trade.rate).toFixed(2))
-      } else {
-        setBuyAmountFiat("")
-      }
-    } else {
+
+    if (type === "fiat") {
       setBuyAmountFiat(value)
-      if (!Number.isNaN(numValue)) {
-        setBuyAmountCrypto((numValue / trade.rate).toFixed(6))
+      if (value && !isNaN(parseFloat(value))) {
+        const cryptoAmount = (parseFloat(value) / trade.rate).toFixed(6)
+        setBuyAmountCrypto(cryptoAmount)
       } else {
         setBuyAmountCrypto("")
+      }
+    } else {
+      setBuyAmountCrypto(value)
+      if (value && !isNaN(parseFloat(value))) {
+        const fiatAmount = (parseFloat(value) * trade.rate).toFixed(2)
+        setBuyAmountFiat(fiatAmount)
+      } else {
+        setBuyAmountFiat("")
       }
     }
   }
 
   const handleInitiateTrade = async () => {
     if (!trade || !buyAmountCrypto) {
-      toast({ title: "Invalid Amount", description: "Please enter a valid amount to buy.", variant: "destructive" })
+      toast({ 
+        title: "Invalid Amount", 
+        description: "Please enter a valid amount to buy.", 
+        variant: "destructive" 
+      })
       return
     }
+
+    const fiatAmount = parseFloat(buyAmountFiat)
+    if (fiatAmount < trade.minLimit || fiatAmount > trade.maxLimit) {
+      toast({ 
+        title: "Amount Out of Range", 
+        description: `Amount must be between $${trade.minLimit} and $${trade.maxLimit}`, 
+        variant: "destructive" 
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      // This is the new endpoint to start the trade and lock funds
-      const response = await fetch("/api/escrows/initiate", {
+      // Use apiFetch instead of direct fetch
+      const result = await apiFetch("/api/escrows/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: trade._id,
           amount: parseFloat(buyAmountCrypto),
+          fiatAmount: parseFloat(buyAmountFiat),
           buyerAddress: state.user?.walletAddress,
         }),
       })
 
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to initiate trade")
-      }
-
-      toast({ title: "Trade Initiated!", description: "Seller's crypto is now locked in escrow." })
+      toast({ 
+        title: "Trade Initiated!", 
+        description: "Seller's crypto is now locked in escrow." 
+      })
+      
       // Refresh the page to show the new trade status
       router.refresh()
-    } catch (error) {
-      const err = error as Error
-      toast({ title: "Error", description: err.message, variant: "destructive" })
+    } catch (error: any) {
+      console.error('Failed to initiate trade:', error)
+      toast({
+        title: "Trade Initiation Failed",
+        description: error.message || "Failed to initiate trade",
+        variant: "destructive",
+      })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // ... handlers for confirmPayment, release, dispute would go here ...
+  if (!state.isAuthenticated) {
+    return null
+  }
 
-  if (isLoading) return <DashboardLayout><p>Loading...</p></DashboardLayout>
-  if (!trade) return <DashboardLayout><p>Order not found.</p></DashboardLayout>
-
-  // RENDER LOGIC
-  // If trade has not started (no escrowId), show the trade initiation view
-  if (!trade.escrowId) {
+  if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center space-x-4">
-            <Link href="/orders">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Marketplace
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Buy {trade.asset}</h1>
-              <p className="text-gray-600">From seller: {trade.seller.username}</p>
-            </div>
-          </div>
-
-          {/* Trade Initiation Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Start Your Trade</CardTitle>
-              <CardDescription>
-                Rate: 1 {trade.asset} = ${trade.rate.toFixed(2)} USD. Limits: ${trade.minLimit} - ${trade.maxLimit}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="buy-fiat">You Pay (USD)</Label>
-                  <Input
-                    id="buy-fiat"
-                    type="number"
-                    placeholder="0.00"
-                    value={buyAmountFiat}
-                    onChange={(e) => handleAmountChange(e.target.value, "fiat")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="buy-crypto">You Receive ({trade.asset})</Label>
-                  <Input
-                    id="buy-crypto"
-                    type="number"
-                    placeholder="0.000000"
-                    value={buyAmountCrypto}
-                    onChange={(e) => handleAmountChange(e.target.value, "crypto")}
-                  />
-                </div>
-              </div>
-              <Button onClick={handleInitiateTrade} disabled={isSubmitting || !buyAmountCrypto} className="w-full">
-                {isSubmitting ? "Initiating..." : `Buy ${trade.asset}`}
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#30a57f]"></div>
         </div>
       </DashboardLayout>
     )
   }
 
-  // If trade HAS started, show the escrow status view
+  if (!trade) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-8">
+          <p className="text-gray-500">Order not found</p>
+          <Link href="/orders">
+            <Button className="mt-4">Back to Orders</Button>
+          </Link>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <h1 className="text-2xl font-bold">Trade in Progress (Escrow #{trade.escrowId})</h1>
-
-        {/* Status Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Status: {trade.escrowStatus}</CardTitle>
-            <CardDescription>Follow the steps below to complete the trade.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Dynamic content based on who is viewing (buyer/seller) and status */}
-            <p>Step 1: Buyer sends fiat payment.</p>
-            <p>Step 2: Buyer confirms payment.</p>
-            <p>Step 3: Seller confirms receipt and releases crypto.</p>
-            
-            {/* Action buttons for the buyer */}
-            {state.user?.walletAddress === trade.buyerAddress && trade.escrowStatus === 'LOCKED' && (
-              <Button>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                I Have Made Payment
-              </Button>
-            )}
-
-            {/* Action buttons for the seller */}
-            {state.user?.walletAddress !== trade.buyerAddress && trade.escrowStatus === 'PAYMENT_SENT' && (
-               <Button>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Confirm Receipt & Release Crypto
-              </Button>
-            )}
-
-            <Button variant="destructive">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Dispute Trade
+        <div className="flex items-center space-x-4">
+          <Link href="/orders">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Orders
             </Button>
-          </CardContent>
-        </Card>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">Order Details</h1>
+            <p className="text-gray-600">Complete your {trade.asset} trade</p>
+          </div>
+        </div>
 
-        {/* Payment Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment Instructions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm bg-gray-100 p-4 rounded-md">{trade.instructions}</p>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Order Information */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Badge variant={trade.orderType === "buy" ? "default" : "secondary"}>
+                      {trade.orderType.toUpperCase()}
+                    </Badge>
+                    <span>{trade.asset}</span>
+                  </CardTitle>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-[#30a57f]">${trade.rate}</div>
+                    <div className="text-sm text-gray-500">per {trade.asset}</div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-gray-500">Available Amount</Label>
+                    <p className="font-semibold">{trade.amount} {trade.asset}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Total Value</Label>
+                    <p className="font-semibold">${(trade.amount * trade.rate).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Order Limits</Label>
+                    <p className="font-semibold">${trade.minLimit} - ${trade.maxLimit}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-500">Payment Method</Label>
+                    <p className="font-semibold flex items-center">
+                      <Building2 className="h-4 w-4 mr-1" />
+                      Bank Transfer
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Bank Details */}
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Bank Details
+                  </Label>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-gray-500">Bank Name</Label>
+                        <p className="font-medium">{trade.bankDetails.bankName}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-gray-500">Account Name</Label>
+                        <p className="font-medium">{trade.bankDetails.accountName}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-gray-500">Account Number</Label>
+                      <p className="font-mono text-lg font-bold">{trade.bankDetails.accountNumber}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Instructions */}
+                {trade.paymentInstructions && (
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Additional Instructions</Label>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm">{trade.paymentInstructions}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Seller Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <User className="h-5 w-5" />
+                  <span>Seller Information</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center space-x-4">
+                  <Avatar className="h-12 w-12">
+                    <AvatarFallback>
+                      {trade.seller.username ? trade.seller.username[0].toUpperCase() : trade.seller.walletAddress.slice(2, 4).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-semibold">
+                      {trade.seller.username || `${trade.seller.walletAddress.slice(0, 6)}...${trade.seller.walletAddress.slice(-4)}`}
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 mr-1" />
+                        {trade.seller.reputation}/5
+                      </div>
+                      <div className="flex items-center">
+                        <Shield className="h-4 w-4 mr-1" />
+                        {trade.seller.completedTrades} trades
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {new Date(trade.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Trading Panel */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Buy {trade.asset}</CardTitle>
+                <CardDescription>Enter the amount you want to purchase</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="buy-fiat">You Pay (USD)</Label>
+                    <Input
+                      id="buy-fiat"
+                      type="number"
+                      placeholder="0.00"
+                      value={buyAmountFiat}
+                      onChange={(e) => handleAmountChange(e.target.value, "fiat")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="buy-crypto">You Receive ({trade.asset})</Label>
+                    <Input
+                      id="buy-crypto"
+                      type="number"
+                      placeholder="0.000000"
+                      value={buyAmountCrypto}
+                      onChange={(e) => handleAmountChange(e.target.value, "crypto")}
+                    />
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleInitiateTrade} 
+                  disabled={isSubmitting || !buyAmountCrypto || parseFloat(buyAmountFiat) < trade.minLimit || parseFloat(buyAmountFiat) > trade.maxLimit} 
+                  className="w-full"
+                >
+                  {isSubmitting ? "Initiating..." : `Buy ${trade.asset}`}
+                </Button>
+                
+                {buyAmountFiat && (parseFloat(buyAmountFiat) < trade.minLimit || parseFloat(buyAmountFiat) > trade.maxLimit) && (
+                  <p className="text-sm text-red-600">
+                    Amount must be between ${trade.minLimit} and ${trade.maxLimit}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Trading Instructions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">How it works</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                <div className="flex items-start space-x-2">
+                  <div className="w-5 h-5 rounded-full bg-[#30a57f] text-white text-xs flex items-center justify-center mt-0.5">1</div>
+                  <p>Click "Buy {trade.asset}" to lock the seller's crypto in escrow</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-5 h-5 rounded-full bg-[#30a57f] text-white text-xs flex items-center justify-center mt-0.5">2</div>
+                  <p>Transfer the agreed amount to the seller's bank account</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-5 h-5 rounded-full bg-[#30a57f] text-white text-xs flex items-center justify-center mt-0.5">3</div>
+                  <p>Seller confirms payment and releases crypto to you</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-5 h-5 rounded-full bg-[#30a57f] text-white text-xs flex items-center justify-center mt-0.5">4</div>
+                  <p>If there's an issue, raise a dispute for admin review</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   )

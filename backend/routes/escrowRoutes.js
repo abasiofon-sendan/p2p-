@@ -2,8 +2,108 @@ const express = require('express');
 const { ethers } = require('ethers');
 const { escrowContract, signer } = require('../services/blockchainService');
 const Escrow = require('../models/Escrow');
+const Order = require('../models/Order');
+const User = require('../models/User');
 
 const router = express.Router();
+
+/**
+ * @route   POST /api/escrows/initiate
+ * @desc    Initiate a trade by locking seller's funds in escrow
+ * @body    { "orderId": "order_id", "amount": 100, "fiatAmount": 100, "buyerAddress": "0x..." }
+ * @access  Public
+ */
+router.post('/initiate', async (req, res) => {
+    try {
+        console.log('=== TRADE INITIATION DEBUG ===');
+        console.log('Request body:', req.body);
+
+        const { orderId, amount, fiatAmount, buyerAddress } = req.body;
+
+        // Validate required fields
+        if (!orderId || !amount || !fiatAmount || !buyerAddress) {
+            return res.status(400).json({ 
+                message: 'Missing required fields: orderId, amount, fiatAmount, buyerAddress' 
+            });
+        }
+
+        // Validate wallet address
+        if (!ethers.isAddress(buyerAddress)) {
+            return res.status(400).json({ message: 'Invalid buyer wallet address' });
+        }
+
+        // Find the order
+        const order = await Order.findById(orderId).populate('seller');
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        // Check if order is still active
+        if (order.status !== 'active') {
+            return res.status(400).json({ message: 'Order is no longer active' });
+        }
+
+        // Validate amount limits
+        if (fiatAmount < order.minLimit || fiatAmount > order.maxLimit) {
+            return res.status(400).json({ 
+                message: `Amount must be between $${order.minLimit} and $${order.maxLimit}` 
+            });
+        }
+
+        // Check if there's sufficient order amount
+        if (amount > order.amount) {
+            return res.status(400).json({ message: 'Insufficient order amount available' });
+        }
+
+        console.log('Creating escrow for trade...');
+        
+        // For now, we'll create a database record for the escrow
+        // In a real implementation, this would interact with the blockchain
+        const escrow = new Escrow({
+            escrowId: Date.now(), // Temporary ID generation
+            amount: ethers.parseUnits(amount.toString(), 6).toString(), // Convert to wei equivalent
+            seller: order.seller.walletAddress.toLowerCase(),
+            buyer: buyerAddress.toLowerCase(),
+            description: `Trade for ${amount} ${order.asset} at $${order.rate} each`,
+            deadline: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours from now
+            orderId: parseInt(orderId.slice(-8), 16), // Convert order ID to number
+            feeAmount: (parseFloat(amount) * 0.01).toString(), // 1% fee
+        });
+
+        await escrow.save();
+        console.log('Escrow created:', escrow.escrowId);
+
+        // Update order status to matched and reduce available amount
+        order.status = 'matched';
+        order.amount = order.amount - amount; // Reduce available amount
+        
+        // If order amount becomes 0, mark as completed
+        if (order.amount <= 0) {
+            order.status = 'completed';
+        }
+        
+        await order.save();
+
+        res.status(201).json({
+            message: 'Trade initiated successfully!',
+            escrow: {
+                escrowId: escrow.escrowId,
+                amount: amount,
+                fiatAmount: fiatAmount,
+                seller: order.seller.walletAddress,
+                buyer: buyerAddress,
+                bankDetails: order.bankDetails,
+                paymentInstructions: order.paymentInstructions,
+                deadline: new Date(escrow.deadline * 1000).toISOString(),
+                status: 'Active'
+            }
+        });
+
+    } catch (error) {
+        console.error('Failed to initiate trade:', error);
+        res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    }
+});
 
 /**
  * @route   POST /api/escrows/:escrowId/dispute
@@ -102,7 +202,7 @@ router.post('/restrict-user', async (req, res) => {
         res.status(200).json({
             message: `User ${userAddress} restricted successfully!`,
             transactionHash: receipt.hash,
-            reason: reason || 'Violation of terms'
+            reason: reason || 'No reason provided'
         });
 
     } catch (error) {
