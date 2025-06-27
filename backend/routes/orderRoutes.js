@@ -13,11 +13,21 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
     try {
-        // Find active sell orders and populate seller's username and reputation
-        const orders = await Order.find({ status: 'active', orderType: 'sell' })
+        const { type } = req.query;
+        
+        // Build query based on type parameter
+        let query = { status: 'active' };
+        if (type === 'sell') {
+            query.orderType = 'sell';
+        } else if (type === 'buy') {
+            query.orderType = 'buy';
+        }
+
+        // Find active orders and populate seller's info
+        const orders = await Order.find(query)
             .populate({
                 path: 'seller',
-                select: 'username reputation completedTrades'
+                select: 'username reputation completedTrades walletAddress'
             })
             .sort({ rate: 1, createdAt: -1 }); // Sort by best rate, then newest
 
@@ -28,82 +38,165 @@ router.get('/', async (req, res) => {
     }
 });
 
-
 /**
  * @route   POST /api/orders/create
- * @desc    Create a new trade order
- * @body    { "seller": "0x...", "amount": "100", "deadline": 1735689600 }
+ * @desc    Create a new trade order in the database
+ * @body    { 
+ *   "orderType": "buy|sell", 
+ *   "asset": "USDT|USDC", 
+ *   "amount": 100, 
+ *   "rate": 1.00,
+ *   "minLimit": 10,
+ *   "maxLimit": 1000,
+ *   "seller": "userId",
+ *   "paymentMethods": ["Bank Transfer"],
+ *   "paymentInstructions": "...",
+ *   "bankDetails": {
+ *     "bankName": "Chase Bank",
+ *     "accountNumber": "1234567890",
+ *     "accountName": "John Doe"
+ *   }
+ * }
  * @access  Public
  */
 router.post('/create', async (req, res) => {
-    const { seller, amount, deadline } = req.body;
-
-    if (!seller || !amount || !deadline) {
-        return res.status(400).json({ message: 'Missing required fields: seller, amount, deadline' });
-    }
-
     try {
-        // The `createOrder` function is called by the buyer.
-        // For this example, we use the backend's signer as the buyer.
-        const buyer = await signer.getAddress();
-        console.log(`Attempting to create order as buyer: ${buyer} for seller: ${seller}`);
+        console.log('=== ORDER CREATION DEBUG ===');
+        console.log('Full request body:', JSON.stringify(req.body, null, 2));
+        console.log('Content-Type:', req.headers['content-type']);
+        console.log('========================');
 
-        // NOTE: For this to work, the 'seller' must have first approved the Escrow contract
-        // to spend their MockUSDT tokens. This is a critical on-chain step.
-        const amountInWei = ethers.parseUnits(amount.toString(), 6); // MockUSDT has 6 decimals
+        const { 
+            orderType, 
+            asset, 
+            amount, 
+            rate, 
+            minLimit, 
+            maxLimit, 
+            seller, 
+            paymentMethods, 
+            paymentInstructions, 
+            bankDetails 
+        } = req.body;
 
-        const tx = await orderManagerContract.createOrder(seller, amountInWei, deadline);
-        const receipt = await tx.wait();
+        console.log('Extracted fields:', {
+            orderType, asset, amount, rate, minLimit, maxLimit, seller, paymentMethods, paymentInstructions, bankDetails
+        });
 
-        // Find the OrderCreated event to get the new orderId
-        const iface = orderManagerContract.interface;
-        const orderCreatedEvent = receipt.logs.map(log => {
-            try {
-                return iface.parseLog(log);
-            } catch (e) {
-                return null;
-            }
-        }).find(e => e?.name === 'OrderCreated');
-        
-        if (!orderCreatedEvent) {
-            throw new Error("OrderCreated event not found in transaction receipt.");
+        // Validate required fields
+        if (!orderType || !asset || !amount || !rate || !minLimit || !maxLimit || !seller) {
+            console.log('❌ Missing required fields validation failed');
+            console.log('Missing fields check:', {
+                orderType: !!orderType,
+                asset: !!asset,
+                amount: !!amount,
+                rate: !!rate,
+                minLimit: !!minLimit,
+                maxLimit: !!maxLimit,
+                seller: !!seller
+            });
+            return res.status(400).json({ 
+                message: 'Missing required fields: orderType, asset, amount, rate, minLimit, maxLimit, seller',
+                received: { orderType, asset, amount, rate, minLimit, maxLimit, seller }
+            });
         }
-        const orderId = orderCreatedEvent.args.orderId;
+
+        // Validate bank details
+        if (!bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.accountName) {
+            console.log('❌ Bank details validation failed');
+            return res.status(400).json({ 
+                message: 'Bank details are required: bankName, accountNumber, accountName',
+                received: bankDetails
+            });
+        }
+
+        // Validate limits
+        if (parseFloat(minLimit) >= parseFloat(maxLimit)) {
+            return res.status(400).json({ 
+                message: 'Maximum limit must be greater than minimum limit' 
+            });
+        }
+
+        // Validate seller exists
+        console.log('Checking if seller exists:', seller);
+        const sellerUser = await User.findById(seller);
+        if (!sellerUser) {
+            console.log('❌ Seller not found:', seller);
+            return res.status(404).json({ message: 'Seller not found' });
+        }
+
+        console.log('✅ All validations passed, creating order...');
+
+        // Create new order
+        const newOrder = new Order({
+            orderType,
+            asset,
+            amount: parseFloat(amount),
+            rate: parseFloat(rate),
+            minLimit: parseFloat(minLimit),
+            maxLimit: parseFloat(maxLimit),
+            seller,
+            paymentMethods: paymentMethods || ['Bank Transfer'],
+            paymentInstructions: paymentInstructions || '',
+            bankDetails: {
+                bankName: bankDetails.bankName.trim(),
+                accountNumber: bankDetails.accountNumber.trim(),
+                accountName: bankDetails.accountName.trim()
+            }
+        });
+
+        console.log('Saving order to database...');
+        const savedOrder = await newOrder.save();
+        console.log('✅ Order saved successfully:', savedOrder._id);
+
+        // Populate seller info for response
+        await savedOrder.populate({
+            path: 'seller',
+            select: 'username reputation completedTrades walletAddress'
+        });
 
         res.status(201).json({
             message: 'Order created successfully!',
-            transactionHash: receipt.hash,
-            orderId: orderId.toString(),
+            order: savedOrder
         });
 
     } catch (error) {
-        console.error('Failed to create order:', error);
+        console.error('❌ Failed to create order:', error);
+        
+        // Handle validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.values(error.errors).map(err => err.message);
+            console.log('Validation errors:', validationErrors);
+            return res.status(400).json({ 
+                message: 'Validation failed', 
+                errors: validationErrors 
+            });
+        }
+
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 });
 
 /**
  * @route   GET /api/orders/:orderId
- * @desc    Get details for a specific order
+ * @desc    Get details for a specific order from database
  * @access  Public
  */
 router.get('/:orderId', async (req, res) => {
     try {
         const { orderId } = req.params;
-        const order = await orderManagerContract.orders(orderId);
+        
+        const order = await Order.findById(orderId)
+            .populate({
+                path: 'seller',
+                select: 'username reputation completedTrades walletAddress'
+            });
 
-        // Format the raw contract data into a readable JSON object
-        const formattedOrder = {
-            orderId: order.orderId.toString(),
-            buyer: order.buyer,
-            seller: order.seller,
-            amount: ethers.formatUnits(order.amount, 6), // Format back to human-readable
-            deadline: new Date(Number(order.deadline) * 1000).toISOString(),
-            status: ["None", "Created", "Cancelled"][order.status],
-            escrowId: order.escrowId.toString(),
-        };
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
 
-        res.status(200).json(formattedOrder);
+        res.status(200).json(order);
     } catch (error) {
         console.error('Failed to fetch order:', error);
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
@@ -111,27 +204,42 @@ router.get('/:orderId', async (req, res) => {
 });
 
 /**
- * @route   POST /api/orders/:orderId/cancel
- * @desc    Cancel an order after the deadline (called by buyer)
+ * @route   PUT /api/orders/:orderId/status
+ * @desc    Update order status
+ * @body    { "status": "active|matched|completed|cancelled" }
  * @access  Public
  */
-router.post('/:orderId/cancel', async (req, res) => {
+router.put('/:orderId/status', async (req, res) => {
     try {
         const { orderId } = req.params;
+        const { status } = req.body;
 
-        // The backend's signer acts as the buyer initiating the cancellation.
-        console.log(`Attempting to cancel order ${orderId} as buyer: ${signer.address}`);
+        if (!status || !['active', 'matched', 'completed', 'cancelled'].includes(status)) {
+            return res.status(400).json({ 
+                message: 'Invalid status. Must be one of: active, matched, completed, cancelled' 
+            });
+        }
 
-        const tx = await orderManagerContract.cancelOrder(orderId);
-        const receipt = await tx.wait();
+        const order = await Order.findByIdAndUpdate(
+            orderId, 
+            { status }, 
+            { new: true }
+        ).populate({
+            path: 'seller',
+            select: 'username reputation completedTrades walletAddress'
+        });
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
 
         res.status(200).json({
-            message: `Order ${orderId} cancelled successfully!`,
-            transactionHash: receipt.hash,
+            message: 'Order status updated successfully',
+            order
         });
 
     } catch (error) {
-        console.error(`Failed to cancel order ${orderId}:`, error);
+        console.error('Failed to update order status:', error);
         res.status(500).json({ message: 'Internal Server Error', error: error.message });
     }
 });

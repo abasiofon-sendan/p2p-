@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/app/providers"
@@ -12,8 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, AlertCircle } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, AlertCircle, Building2 } from "lucide-react"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useToast } from "@/hooks/use-toast"
@@ -30,30 +28,18 @@ export default function PlaceOrderPage() {
   const [minLimit, setMinLimit] = useState("")
   const [maxLimit, setMaxLimit] = useState("")
   const [instructions, setInstructions] = useState("")
-  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>([])
-  const [selectedBankAccount, setSelectedBankAccount] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
+  // Bank details state
+  const [bankName, setBankName] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountName, setAccountName] = useState("")
 
   useEffect(() => {
     if (!state.isAuthenticated) {
       router.push("/login")
     }
   }, [state.isAuthenticated, router])
-
-  const paymentMethods = ["Bank Transfer", "PayPal", "Zelle", "Venmo", "Cash App", "Wire Transfer"]
-
-  const bankAccounts = [
-    { id: "1", name: "Chase Bank", account: "****1234" },
-    { id: "2", name: "Bank of America", account: "****5678" },
-  ]
-
-  const handlePaymentMethodChange = (method: string, checked: boolean) => {
-    if (checked) {
-      setSelectedPaymentMethods([...selectedPaymentMethods, method])
-    } else {
-      setSelectedPaymentMethods(selectedPaymentMethods.filter((m) => m !== method))
-    }
-  }
 
   const calculateTotal = () => {
     const amountNum = Number.parseFloat(amount) || 0
@@ -76,10 +62,23 @@ export default function PlaceOrderPage() {
       return
     }
 
-    if (selectedPaymentMethods.length === 0) {
+    if (!bankName || !accountNumber || !accountName) {
       toast({
-        title: "Payment Method Required",
-        description: "Please select at least one payment method",
+        title: "Bank Details Required",
+        description: "Please fill in all bank details",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    // Validate limits
+    const minLimitNum = parseFloat(minLimit)
+    const maxLimitNum = parseFloat(maxLimit)
+    if (minLimitNum >= maxLimitNum) {
+      toast({
+        title: "Invalid Limits",
+        description: "Maximum limit must be greater than minimum limit",
         variant: "destructive",
       })
       setIsLoading(false)
@@ -87,6 +86,8 @@ export default function PlaceOrderPage() {
     }
 
     try {
+      console.log('Current user state:', state.user); // Add this line
+
       // Prepare payload
       const payload = {
         orderType,
@@ -95,13 +96,19 @@ export default function PlaceOrderPage() {
         rate: parseFloat(rate),
         minLimit: parseFloat(minLimit),
         maxLimit: parseFloat(maxLimit),
-        seller: state.user?.id, // or walletAddress, depending on backend
-        paymentMethods: selectedPaymentMethods,
+        seller: state.user?.id || state.user?._id, // Try both id and _id
+        paymentMethods: ["Bank Transfer"], // Only bank transfer allowed
         paymentInstructions: instructions,
-        bankAccount: selectedBankAccount,
+        bankDetails: {
+          bankName: bankName.trim(),
+          accountNumber: accountNumber.trim(),
+          accountName: accountName.trim(),
+        },
       }
 
-      // POST to backend
+      console.log('Creating order with payload:', payload)
+
+      // POST to backend - Remove BASE_URL since apiFetch handles it
       await apiFetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -115,6 +122,7 @@ export default function PlaceOrderPage() {
 
       router.push("/orders")
     } catch (error: any) {
+      console.error('Order creation failed:', error)
       toast({
         title: "Order Creation Failed",
         description: error.message || "An error occurred",
@@ -262,48 +270,61 @@ export default function PlaceOrderPage() {
                 </div>
               )}
 
-              {/* Payment Methods */}
-              <div className="space-y-3">
-                <Label>Payment Methods</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {paymentMethods.map((method) => (
-                    <div key={method} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={method}
-                        checked={selectedPaymentMethods.includes(method)}
-                        onCheckedChange={(checked) => handlePaymentMethodChange(method, checked as boolean)}
-                      />
-                      <Label htmlFor={method} className="text-sm">
-                        {method}
-                      </Label>
-                    </div>
-                  ))}
+              {/* Bank Details Section */}
+              <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-center space-x-2">
+                  <Building2 className="h-5 w-5 text-gray-600" />
+                  <Label className="text-base font-semibold">Bank Details</Label>
                 </div>
-              </div>
+                <p className="text-sm text-gray-600">
+                  Provide your bank details for receiving payments. This information will be shared with buyers.
+                </p>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Input
+                      id="bankName"
+                      type="text"
+                      placeholder="e.g., Chase Bank, Bank of America"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      required
+                    />
+                  </div>
 
-              {/* Bank Account Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="bankAccount">Bank Account</Label>
-                <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select bank account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {bankAccounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name} {account.account}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <div className="space-y-2">
+                    <Label htmlFor="accountNumber">Account Number</Label>
+                    <Input
+                      id="accountNumber"
+                      type="text"
+                      placeholder="Enter your account number"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="accountName">Account Holder Name</Label>
+                    <Input
+                      id="accountName"
+                      type="text"
+                      placeholder="Full name as on bank account"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Instructions */}
               <div className="space-y-2">
-                <Label htmlFor="instructions">Payment Instructions</Label>
+                <Label htmlFor="instructions">Additional Payment Instructions</Label>
                 <Textarea
                   id="instructions"
-                  placeholder="Provide clear instructions for the payment process..."
+                  placeholder="Provide any additional instructions for the bank transfer process (optional)..."
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   rows={4}
@@ -316,10 +337,12 @@ export default function PlaceOrderPage() {
                   <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
                   <div className="text-sm">
                     <p className="font-medium text-yellow-800">Important:</p>
-                    <p className="text-yellow-700">
-                      Make sure you have sufficient balance and can fulfill this order. Orders that cannot be completed
-                      may result in penalties.
-                    </p>
+                    <ul className="text-yellow-700 mt-1 space-y-1">
+                      <li>• Make sure you have sufficient balance and can fulfill this order</li>
+                      <li>• Your bank details will be shared with buyers when they initiate a trade</li>
+                      <li>• Only bank transfers are accepted as payment method</li>
+                      <li>• Orders that cannot be completed may result in penalties</li>
+                    </ul>
                   </div>
                 </div>
               </div>

@@ -1,5 +1,23 @@
 const mongoose = require('mongoose');
 
+const bankDetailsSchema = new mongoose.Schema({
+    bankName: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    accountNumber: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    accountName: {
+        type: String,
+        required: true,
+        trim: true,
+    }
+}, { _id: false }); // Don't create separate _id for subdocument
+
 const orderSchema = new mongoose.Schema({
     orderId: { // Optional: If you link to a smart contract order ID
         type: String,
@@ -42,12 +60,18 @@ const orderSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
-    paymentMethods: [{ // List of accepted payment methods
+    paymentMethods: [{ // List of accepted payment methods (now only Bank Transfer)
         type: String,
+        enum: ['Bank Transfer'], // Restrict to only bank transfers
+        default: ['Bank Transfer']
     }],
     paymentInstructions: {
         type: String,
         trim: true,
+    },
+    bankDetails: {
+        type: bankDetailsSchema,
+        required: true, // Bank details are now required
     }
 }, {
     timestamps: true // Adds createdAt and updatedAt fields automatically
