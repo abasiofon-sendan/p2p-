@@ -78,7 +78,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          {/* <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">KYC Status</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
@@ -89,7 +89,7 @@ export default function DashboardPage() {
               </Badge>
               <p className="text-xs text-muted-foreground mt-1">Identity verification</p>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
 
         {/* Main Content Tabs */}
@@ -98,7 +98,7 @@ export default function DashboardPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="banking">Banking</TabsTrigger>
-            <TabsTrigger value="kyc">KYC</TabsTrigger>
+            {/* <TabsTrigger value="kyc">KYC</TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
