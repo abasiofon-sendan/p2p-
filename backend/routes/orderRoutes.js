@@ -61,6 +61,11 @@ router.get('/', async (req, res) => {
  */
 router.post('/create', async (req, res) => {
     try {
+        console.log('=== ORDER CREATION DEBUG ===');
+        console.log('Full request body:', JSON.stringify(req.body, null, 2));
+        console.log('Content-Type:', req.headers['content-type']);
+        console.log('========================');
+
         const { 
             orderType, 
             asset, 
@@ -74,32 +79,53 @@ router.post('/create', async (req, res) => {
             bankDetails 
         } = req.body;
 
+        console.log('Extracted fields:', {
+            orderType, asset, amount, rate, minLimit, maxLimit, seller, paymentMethods, paymentInstructions, bankDetails
+        });
+
         // Validate required fields
         if (!orderType || !asset || !amount || !rate || !minLimit || !maxLimit || !seller) {
+            console.log('❌ Missing required fields validation failed');
+            console.log('Missing fields check:', {
+                orderType: !!orderType,
+                asset: !!asset,
+                amount: !!amount,
+                rate: !!rate,
+                minLimit: !!minLimit,
+                maxLimit: !!maxLimit,
+                seller: !!seller
+            });
             return res.status(400).json({ 
-                message: 'Missing required fields: orderType, asset, amount, rate, minLimit, maxLimit, seller' 
+                message: 'Missing required fields: orderType, asset, amount, rate, minLimit, maxLimit, seller',
+                received: { orderType, asset, amount, rate, minLimit, maxLimit, seller }
             });
         }
 
         // Validate bank details
         if (!bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.accountName) {
+            console.log('❌ Bank details validation failed');
             return res.status(400).json({ 
-                message: 'Bank details are required: bankName, accountNumber, accountName' 
+                message: 'Bank details are required: bankName, accountNumber, accountName',
+                received: bankDetails
             });
         }
 
         // Validate limits
-        if (minLimit >= maxLimit) {
+        if (parseFloat(minLimit) >= parseFloat(maxLimit)) {
             return res.status(400).json({ 
                 message: 'Maximum limit must be greater than minimum limit' 
             });
         }
 
         // Validate seller exists
+        console.log('Checking if seller exists:', seller);
         const sellerUser = await User.findById(seller);
         if (!sellerUser) {
+            console.log('❌ Seller not found:', seller);
             return res.status(404).json({ message: 'Seller not found' });
         }
+
+        console.log('✅ All validations passed, creating order...');
 
         // Create new order
         const newOrder = new Order({
@@ -119,7 +145,9 @@ router.post('/create', async (req, res) => {
             }
         });
 
+        console.log('Saving order to database...');
         const savedOrder = await newOrder.save();
+        console.log('✅ Order saved successfully:', savedOrder._id);
 
         // Populate seller info for response
         await savedOrder.populate({
@@ -133,11 +161,12 @@ router.post('/create', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Failed to create order:', error);
+        console.error('❌ Failed to create order:', error);
         
         // Handle validation errors
         if (error.name === 'ValidationError') {
             const validationErrors = Object.values(error.errors).map(err => err.message);
+            console.log('Validation errors:', validationErrors);
             return res.status(400).json({ 
                 message: 'Validation failed', 
                 errors: validationErrors 

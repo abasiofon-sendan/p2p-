@@ -5,7 +5,7 @@ const { orderManagerContract, signer } = require('../services/blockchainService'
 const router = express.Router();
 
 /**
- * @route   POST /api/orders/:orderId/cancel
+ * @route   POST /api/contracts/:orderId/cancel
  * @desc    Cancel an order after the deadline (called by buyer)
  * @access  Public
  */
@@ -31,41 +31,8 @@ router.post('/:orderId/cancel', async (req, res) => {
 });
 
 /**
- * @route   POST /api/orders/create
- * @desc    Create a new order
- * @access  Public
- */
-router.post('/create', async (req, res) => {
-    try {
-        const { buyer, seller, amount, deadline, description } = req.body;
-
-        // In a real application, you'd validate and sanitize input data.
-        console.log(`Creating order from ${buyer} to ${seller} for ${amount} ETH`);
-
-        const tx = await orderManagerContract.createOrder(
-            buyer,
-            seller,
-            ethers.parseUnits(amount.toString(), 6),
-            Math.floor(new Date(deadline).getTime() / 1000),
-            description
-        );
-        const receipt = await tx.wait();
-
-        res.status(201).json({
-            message: 'Order created successfully!',
-            orderId: receipt.events[0].args.orderId,
-            transactionHash: receipt.hash,
-        });
-
-    } catch (error) {
-        console.error('Failed to create order:', error);
-        res.status(500).json({ message: 'Internal Server Error', error: error.message });
-    }
-});
-
-/**
- * @route   GET /api/orders/:orderId
- * @desc    Get details for a specific order
+ * @route   GET /api/contracts/:orderId
+ * @desc    Get details for a specific order from blockchain
  * @access  Public
  */
 router.get('/:orderId', async (req, res) => {

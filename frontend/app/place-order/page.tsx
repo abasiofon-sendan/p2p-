@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { env } from "process"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/app/providers"
@@ -17,8 +16,6 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useToast } from "@/hooks/use-toast"
 import { apiFetch } from "@/utils/api"
-
-const BASE_URL = env.BASE_URL || "http://localhost:5001"
 
 export default function PlaceOrderPage() {
   const { state } = useApp()
@@ -89,6 +86,8 @@ export default function PlaceOrderPage() {
     }
 
     try {
+      console.log('Current user state:', state.user); // Add this line
+
       // Prepare payload
       const payload = {
         orderType,
@@ -97,7 +96,7 @@ export default function PlaceOrderPage() {
         rate: parseFloat(rate),
         minLimit: parseFloat(minLimit),
         maxLimit: parseFloat(maxLimit),
-        seller: state.user?.id, // or walletAddress, depending on backend
+        seller: state.user?.id || state.user?._id, // Try both id and _id
         paymentMethods: ["Bank Transfer"], // Only bank transfer allowed
         paymentInstructions: instructions,
         bankDetails: {
@@ -107,8 +106,10 @@ export default function PlaceOrderPage() {
         },
       }
 
-      // POST to backend
-      await apiFetch(`${BASE_URL}/api/orders/create`, {
+      console.log('Creating order with payload:', payload)
+
+      // POST to backend - Remove BASE_URL since apiFetch handles it
+      await apiFetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -121,6 +122,7 @@ export default function PlaceOrderPage() {
 
       router.push("/orders")
     } catch (error: any) {
+      console.error('Order creation failed:', error)
       toast({
         title: "Order Creation Failed",
         description: error.message || "An error occurred",
@@ -277,7 +279,7 @@ export default function PlaceOrderPage() {
                 <p className="text-sm text-gray-600">
                   Provide your bank details for receiving payments. This information will be shared with buyers.
                 </p>
-
+                
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="bankName">Bank Name</Label>
