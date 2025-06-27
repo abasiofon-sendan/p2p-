@@ -16,7 +16,7 @@ import { apiFetch } from "@/utils/api"
 // The Order interface should match the backend's response
 interface Order {
   _id: string
-  orderId: string
+  orderId?: string
   orderType: "buy" | "sell"
   asset: "USDT" | "USDC"
   amount: number
@@ -29,8 +29,15 @@ interface Order {
     username: string
     reputation: number
     completedTrades: number
+    walletAddress: string
   }
   paymentMethods: string[]
+  paymentInstructions?: string
+  bankDetails: {
+    bankName: string
+    accountNumber: string
+    accountName: string
+  }
   createdAt: string
 }
   const BASE_URL = env.BASE_URL || "http://localhost:5001"
