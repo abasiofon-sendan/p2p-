@@ -10,10 +10,8 @@ const connectDB = async () => {
     console.log('Connecting to MongoDB:', process.env.MONGODB_URI);
     
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        // Remove deprecated options - they're not needed in mongoose 8.x
+        const conn = await mongoose.connect(process.env.MONGODB_URI);
         
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {

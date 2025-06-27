@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { env } from "process"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/app/providers"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -32,6 +33,7 @@ interface Order {
   paymentMethods: string[]
   createdAt: string
 }
+  const BASE_URL = env.BASE_URL || "http://localhost:5001"
 
 export default function OrdersPage() {
   const { state } = useApp()
@@ -52,7 +54,7 @@ export default function OrdersPage() {
     const fetchOrders = async () => {
       setIsLoading(true)
       try {
-        const data = await apiFetch("/api/orders?type=sell")
+        const data = await apiFetch(`${BASE_URL}/api/orders?type=sell`)
         setOrders(data)
       } catch (error) {
         console.error(error)

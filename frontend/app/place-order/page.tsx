@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { env } from "process"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/app/providers"
@@ -18,6 +18,8 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useToast } from "@/hooks/use-toast"
 import { apiFetch } from "@/utils/api"
+
+  const BASE_URL = env.BASE_URL || "http://localhost:5001"
 
 export default function PlaceOrderPage() {
   const { state } = useApp()
@@ -102,7 +104,7 @@ export default function PlaceOrderPage() {
       }
 
       // POST to backend
-      await apiFetch("/api/orders/create", {
+      await apiFetch(`${BASE_URL}/api/orders/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
