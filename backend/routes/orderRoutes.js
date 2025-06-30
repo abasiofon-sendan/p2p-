@@ -101,13 +101,17 @@ router.post('/create', async (req, res) => {
             });
         }
 
-        // Validate bank details
-        if (!bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.accountName) {
-            console.log('❌ Bank details validation failed');
-            return res.status(400).json({ 
-                message: 'Bank details are required: bankName, accountNumber, accountName',
-                received: bankDetails
-            });
+        // Only require bank details for buy orders
+        if (orderType === 'buy') {
+            if (!bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.accountName) {
+                return res.status(400).json({ 
+                    message: 'Bank details are required for buy orders: bankName, accountNumber, accountName',
+                    received: bankDetails
+                });
+            }
+        } else if (orderType === 'sell') {
+            // For sell orders, ignore any bankDetails sent from frontend
+            req.body.bankDetails = undefined;
         }
 
         // Validate limits
@@ -131,18 +135,18 @@ router.post('/create', async (req, res) => {
         const newOrder = new Order({
             orderType,
             asset,
-            amount: parseFloat(amount),
-            rate: parseFloat(rate),
+            amount: parseFloat(amount), // For sell: Naira; for buy: crypto
+            rate: parseFloat(rate), // Naira per USDT
             minLimit: parseFloat(minLimit),
             maxLimit: parseFloat(maxLimit),
             seller,
             paymentMethods: paymentMethods || ['Bank Transfer'],
             paymentInstructions: paymentInstructions || '',
-            bankDetails: {
+            bankDetails: orderType === 'buy' ? {
                 bankName: bankDetails.bankName.trim(),
                 accountNumber: bankDetails.accountNumber.trim(),
                 accountName: bankDetails.accountName.trim()
-            }
+            } : undefined
         });
 
         console.log('Saving order to database...');

@@ -44,7 +44,14 @@ export default function PlaceOrderPage() {
   const calculateTotal = () => {
     const amountNum = Number.parseFloat(amount) || 0
     const rateNum = Number.parseFloat(rate) || 0
-    return (amountNum * rateNum).toFixed(2)
+    if (orderType === "sell") {
+      // For sell: amount is in NGN, total is amount/rate (crypto to receive)
+      if (!rateNum) return "0.00"
+      return (amountNum / rateNum).toFixed(6) // show up to 6 decimals for crypto
+    } else {
+      // For buy: amount is in crypto, total is amount*rate (naira to pay)
+      return (amountNum * rateNum).toFixed(2)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +69,8 @@ export default function PlaceOrderPage() {
       return
     }
 
-    if (!bankName || !accountNumber || !accountName) {
+    // Only require bank details for buy orders
+    if (orderType === "buy" && (!bankName || !accountNumber || !accountName)) {
       toast({
         title: "Bank Details Required",
         description: "Please fill in all bank details",
@@ -86,10 +94,8 @@ export default function PlaceOrderPage() {
     }
 
     try {
-      console.log('Current user state:', state.user); // Add this line
-
       // Prepare payload
-      const payload = {
+      const payload: any = {
         orderType,
         asset: currency,
         amount: parseFloat(amount),
@@ -97,18 +103,20 @@ export default function PlaceOrderPage() {
         minLimit: parseFloat(minLimit),
         maxLimit: parseFloat(maxLimit),
         seller: state.user?.id || state.user?._id, // Try both id and _id
-        paymentMethods: ["Bank Transfer"], // Only bank transfer allowed
+        paymentMethods: ["Bank Transfer"],
         paymentInstructions: instructions,
-        bankDetails: {
+      }
+      // Only include bankDetails for buy orders
+      if (orderType === "buy") {
+        payload.bankDetails = {
           bankName: bankName.trim(),
           accountNumber: accountNumber.trim(),
           accountName: accountName.trim(),
-        },
+        }
+      } else {
+        delete payload.bankDetails;
       }
 
-      console.log('Creating order with payload:', payload)
-
-      // POST to backend - Remove BASE_URL since apiFetch handles it
       await apiFetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,7 +130,6 @@ export default function PlaceOrderPage() {
 
       router.push("/orders")
     } catch (error: any) {
-      console.error('Order creation failed:', error)
       toast({
         title: "Order Creation Failed",
         description: error.message || "An error occurred",
@@ -192,13 +199,15 @@ export default function PlaceOrderPage() {
               {/* Amount and Rate */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Amount ({currency})</Label>
+                  <Label htmlFor="amount">
+                    Amount {orderType === "sell" ? "(NGN)" : `(${currency})`}
+                  </Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="amount"
                       type="number"
-                      placeholder="0.00"
+                      placeholder={orderType === "sell" ? "0.00 (NGN)" : `0.00 (${currency})`}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       className="pl-10"
@@ -208,14 +217,18 @@ export default function PlaceOrderPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rate">Rate (USD per {currency})</Label>
+                  <Label htmlFor="rate">
+                    {orderType === "sell"
+                      ? `Rate (Naira per ${currency})`
+                      : `Rate (USD per ${currency})`}
+                  </Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="rate"
                       type="number"
                       step="0.01"
-                      placeholder="1.00"
+                      placeholder={orderType === "sell" ? "e.g. 1500 (NGN)" : "1.00"}
                       value={rate}
                       onChange={(e) => setRate(e.target.value)}
                       className="pl-10"
@@ -228,13 +241,13 @@ export default function PlaceOrderPage() {
               {/* Limits */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="minLimit">Minimum Limit (USD)</Label>
+                  <Label htmlFor="minLimit">Minimum Limit {orderType === "sell" ? "(NGN)" : "(USD)"}</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="minLimit"
                       type="number"
-                      placeholder="0.00"
+                      placeholder={orderType === "sell" ? "0.00 (NGN)" : "0.00"}
                       value={minLimit}
                       onChange={(e) => setMinLimit(e.target.value)}
                       className="pl-10"
@@ -244,13 +257,13 @@ export default function PlaceOrderPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="maxLimit">Maximum Limit (USD)</Label>
+                  <Label htmlFor="maxLimit">Maximum Limit {orderType === "sell" ? "(NGN)" : "(USD)"}</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="maxLimit"
                       type="number"
-                      placeholder="0.00"
+                      placeholder={orderType === "sell" ? "0.00 (NGN)" : "0.00"}
                       value={maxLimit}
                       onChange={(e) => setMaxLimit(e.target.value)}
                       className="pl-10"
@@ -265,59 +278,26 @@ export default function PlaceOrderPage() {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Total Value:</span>
-                    <span className="text-xl font-bold text-[#30a57f]">${calculateTotal()} USD</span>
+                    {orderType === "sell" ? (
+                      <span className="text-xl font-bold text-[#30a57f]">{calculateTotal()} {currency}</span>
+                    ) : (
+                      <span className="text-xl font-bold text-[#30a57f]">₦{calculateTotal()} NGN</span>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Bank Details Section */}
-              <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                <div className="flex items-center space-x-2">
-                  <Building2 className="h-5 w-5 text-gray-600" />
-                  <Label className="text-base font-semibold">Bank Details</Label>
+              {/* Bank Details - only for buy orders */}
+              {orderType === "buy" && (
+                <div className="space-y-2">
+                  <Label htmlFor="bankName">Bank Name</Label>
+                  <Input id="bankName" placeholder="Bank Name" value={bankName} onChange={e => setBankName(e.target.value)} />
+                  <Label htmlFor="accountNumber">Account Number</Label>
+                  <Input id="accountNumber" placeholder="Account Number" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} />
+                  <Label htmlFor="accountName">Account Name</Label>
+                  <Input id="accountName" placeholder="Account Name" value={accountName} onChange={e => setAccountName(e.target.value)} />
                 </div>
-                <p className="text-sm text-gray-600">
-                  Provide your bank details for receiving payments. This information will be shared with buyers.
-                </p>
-                
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bankName">Bank Name</Label>
-                    <Input
-                      id="bankName"
-                      type="text"
-                      placeholder="e.g., Chase Bank, Bank of America"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="accountNumber">Account Number</Label>
-                    <Input
-                      id="accountNumber"
-                      type="text"
-                      placeholder="Enter your account number"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="accountName">Account Holder Name</Label>
-                    <Input
-                      id="accountName"
-                      type="text"
-                      placeholder="Full name as on bank account"
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Instructions */}
               <div className="space-y-2">

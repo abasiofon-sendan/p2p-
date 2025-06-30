@@ -34,11 +34,11 @@ const orderSchema = new mongoose.Schema({
         enum: ['USDT', 'USDC'],
         required: true,
     },
-    amount: { // Total amount of crypto for sale/purchase
+    amount: { // For sell orders: amount in Naira; for buy orders: amount in crypto
         type: Number,
         required: true,
     },
-    rate: { // Fiat price per unit of crypto
+    rate: { // Naira per USDT (for both buy and sell orders)
         type: Number,
         required: true,
     },
@@ -71,7 +71,7 @@ const orderSchema = new mongoose.Schema({
     },
     bankDetails: {
         type: bankDetailsSchema,
-        required: true, // Bank details are now required
+        required: function() { return this.orderType === 'buy'; }, // Only required for buy orders
     }
 }, {
     timestamps: true // Adds createdAt and updatedAt fields automatically

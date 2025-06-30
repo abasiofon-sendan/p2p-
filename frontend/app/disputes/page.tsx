@@ -19,31 +19,7 @@ export default function DisputesPage() {
     }
   }, [state.isAuthenticated, router])
 
-  const mockDisputes = [
-    {
-      id: "1",
-      orderId: "ORD-001",
-      type: "payment_not_received",
-      status: "open",
-      createdAt: "2024-01-15",
-      counterpart: "trader_pro",
-      amount: 1000,
-      currency: "USDT",
-      description: "Payment was sent but seller claims not received",
-    },
-    {
-      id: "2",
-      orderId: "ORD-002",
-      type: "crypto_not_released",
-      status: "resolved",
-      createdAt: "2024-01-10",
-      counterpart: "crypto_king",
-      amount: 500,
-      currency: "USDC",
-      description: "Crypto not released after payment confirmation",
-      resolution: "Resolved in your favor",
-    },
-  ]
+  const disputes = [] // Replace with real data fetching logic later
 
   if (!state.isAuthenticated) {
     return null
@@ -60,7 +36,7 @@ export default function DisputesPage() {
 
         {/* Disputes List */}
         <div className="space-y-4">
-          {mockDisputes.length === 0 ? (
+          {disputes.length === 0 ? (
             <Card>
               <CardContent className="text-center py-12">
                 <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -69,7 +45,7 @@ export default function DisputesPage() {
               </CardContent>
             </Card>
           ) : (
-            mockDisputes.map((dispute) => (
+            disputes.map((dispute) => (
               <Card key={dispute.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
