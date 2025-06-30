@@ -56,7 +56,7 @@ type AppAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_DASHBOARD_DATA"; payload: DashboardData }
 
-  const BASE_URL = env.BASE_URL || "http://localhost:5001"
+  const BASE_URL = env.BASE_URL || "http://localhost:5000"
 
 const initialState: AppState = {
   isAuthenticated: false,
