@@ -6,156 +6,92 @@ const escrowSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
-    amount: {
+    order: { // Link to the original order
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order',
+        required: true,
+    },
+    amount: { // Crypto amount
         type: String,
         required: true
     },
+    fiatAmount: { // Fiat amount for the trade
+        type: Number,
+        required: true,
+    },
     seller: {
-        type: String,
+        type: String, // wallet address
         required: true,
         lowercase: true
     },
     buyer: {
-        type: String,
+        type: String, // wallet address
         required: true,
         lowercase: true
     },
-    released: {
-        type: Boolean,
-        default: false
-    },
-    disputed: {
-        type: Boolean,
-        default: false
-    },
-    description: {
+    status: {
         type: String,
-        maxlength: 500,
-        default: ''
+        enum: ['Active', 'PaymentSent', 'Disputed', 'Completed', 'Cancelled'],
+        default: 'Active'
     },
-    deadline: {
+    // Payment confirmation fields
+    paymentSentAt: {
+        type: Date
+    },
+    paymentConfirmedAt: {
+        type: Date
+    },
+    // Dispute system fields
+    disputeReason: {
+        type: String,
+        trim: true,
+    },
+    disputeRaisedBy: {
+        type: String, // 'buyer' or 'seller'
+        enum: ['buyer', 'seller']
+    },
+    disputeRaisedAt: {
+        type: Date
+    },
+    disputeResolution: {
+        type: String,
+        enum: ['pending', 'awarded_to_buyer', 'awarded_to_seller']
+    },
+    disputeResolvedBy: {
+        type: String, // admin wallet address
+    },
+    disputeResolvedAt: {
+        type: Date
+    },
+    // Evidence storage
+    buyerEvidence: [{
+        type: String, // URL or description of evidence
+        uploadedAt: { type: Date, default: Date.now }
+    }],
+    sellerEvidence: [{
+        type: String, // URL or description of evidence
+        uploadedAt: { type: Date, default: Date.now }
+    }],
+    // Communication log
+    disputeMessages: [{
+        from: String, // wallet address
+        message: String,
+        timestamp: { type: Date, default: Date.now }
+    }],
+    deadline: { // Deadline for the trade to be completed
         type: Number,
         required: true
     },
-    refunded: {
-        type: Boolean,
-        default: false
-    },
     transactionHash: {
         type: String,
-        required: false
     },
-    orderId: {
-        type: Number,
-        required: false
-    },
-    // Additional fields for tracking
-    createdBlockNumber: {
-        type: Number,
-        required: false
-    },
-    releasedBlockNumber: {
-        type: Number,
-        required: false
-    },
-    disputedBlockNumber: {
-        type: Number,
-        required: false
-    },
-    cancelledBlockNumber: {
-        type: Number,
-        required: false
-    },
-    // Fee information
-    feeAmount: {
-        type: String,
-        default: '0'
-    },
-    feePercentage: {
-        type: Number,
-        default: 100 // 1% in basis points
-    }
 }, {
     timestamps: true
 });
 
-// Index for efficient queries
-// escrowSchema.index({ escrowId: 1 });
-escrowSchema.index({ seller: 1 });
-escrowSchema.index({ buyer: 1 });
-escrowSchema.index({ released: 1 });
-escrowSchema.index({ disputed: 1 });
-escrowSchema.index({ deadline: 1 });
-
-// Virtual for status calculation
-escrowSchema.virtual('status').get(function() {
-    if (this.refunded) return 'Refunded';
-    if (this.disputed) return 'Disputed';
-    if (this.released) return 'Released';
-    if (Date.now() / 1000 > this.deadline) return 'Expired';
-    return 'Active';
-});
-
-// Method to check if escrow is expired
-escrowSchema.methods.isExpired = function() {
-    return Date.now() / 1000 > this.deadline;
-};
-
-// Method to check if escrow can be cancelled
-escrowSchema.methods.canBeCancelled = function() {
-    return !this.released && !this.disputed && !this.refunded && this.isExpired();
-};
-
-// Method to check if escrow can be released
-escrowSchema.methods.canBeReleased = function() {
-    return !this.released && !this.disputed && !this.refunded;
-};
-
-// Method to check if escrow can be disputed
-escrowSchema.methods.canBeDisputed = function() {
-    return !this.released && !this.disputed && !this.refunded;
-};
-
-// Pre-save middleware to ensure lowercase addresses
-escrowSchema.pre('save', function(next) {
-    if (this.seller) {
-        this.seller = this.seller.toLowerCase();
-    }
-    if (this.buyer) {
-        this.buyer = this.buyer.toLowerCase();
-    }
-    next();
-});
-
-// Static method to find escrows by participant
-escrowSchema.statics.findByParticipant = function(address) {
-    const normalizedAddress = address.toLowerCase();
-    return this.find({
-        $or: [
-            { seller: normalizedAddress },
-            { buyer: normalizedAddress }
-        ]
-    });
-};
-
-// Static method to find active escrows
-escrowSchema.statics.findActive = function() {
-    return this.find({
-        released: false,
-        disputed: false,
-        refunded: false
-    });
-};
-
-// Static method to find expired escrows
-escrowSchema.statics.findExpired = function() {
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    return this.find({
-        deadline: { $lt: currentTimestamp },
-        released: false,
-        disputed: false,
-        refunded: false
-    });
-};
+// Indexes for efficient queries
+escrowSchema.index({ seller: 1, status: 1 });
+escrowSchema.index({ buyer: 1, status: 1 });
+escrowSchema.index({ status: 1, disputeRaisedAt: 1 });
 
 module.exports = mongoose.model('Escrow', escrowSchema);
