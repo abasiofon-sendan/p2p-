@@ -56,7 +56,8 @@ type AppAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_DASHBOARD_DATA"; payload: DashboardData }
 
-  const BASE_URL = env.BASE_URL || "http://localhost:5000"
+  // const BASE_URL = env.BASE_URL || "http://localhost:5000"
+  const BASE_URL = env.BASE_URL || "https://tradeam-k8al.onrender.com/"
 
 const initialState: AppState = {
   isAuthenticated: false,
