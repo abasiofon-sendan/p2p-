@@ -5,6 +5,8 @@ import { useReducer, createContext, useContext, type ReactNode, useCallback, use
 import { useToast } from "@/components/ui/use-toast"
 import { env } from "process"
 import { apiFetch } from "@/utils/api"
+import { useRouter } from 'next/navigation';
+
 
 // Define types for our state
 interface User {
@@ -58,7 +60,7 @@ type AppAction =
   | { type: "SET_DASHBOARD_DATA"; payload: DashboardData }
 
   // const BASE_URL = env.NEXT_PUBLIC_BASE_URL || "http://localhost:5000"
-  const BASE_URL = env.BASE_URL || "https://tradeam-k8al.onrender.com/"
+  const BASE_URL = env.BASE_URL || "https://tradeam-k8al.onrender.com"
 
 const initialState: AppState = {
   isAuthenticated: false,
@@ -100,6 +102,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined)
 
 export function Providers({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
+  const router = useRouter();
   const { toast } = useToast()
 
   // Restore user from localStorage on mount
@@ -142,6 +145,7 @@ export function Providers({ children }: { children: ReactNode }) {
           dispatch({ type: "SET_USER", payload: data.user });
           // Save user to localStorage
           localStorage.setItem("user", JSON.stringify(data.user));
+          router.push("/dashboard");
 
           toast({
             title: "Wallet Connected",
