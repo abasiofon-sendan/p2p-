@@ -8,6 +8,32 @@ const User = require('../models/User');
 const router = express.Router();
 
 /**
+ * @route   GET /api/escrows/by-order/:orderId
+ * @desc    Get an escrow by its associated Order ID
+ * @access  Public (for now, should be protected)
+ */
+router.get('/by-order/:orderId', async (req, res) => {
+    try {
+        const escrow = await Escrow.findOne({ order: req.params.orderId }).populate({
+            path: 'order',
+            populate: {
+                path: 'seller',
+                model: 'User',
+                select: 'walletAddress fullName kycStatus'
+            }
+        });
+
+        if (!escrow) {
+            return res.status(404).json({ message: 'Escrow not found for this order' });
+        }
+        res.json(escrow);
+    } catch (error) {
+        console.error('Failed to fetch escrow by order ID:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+/**
  * @route   POST /api/escrows/initiate
  * @desc    Initiate a trade by creating an escrow record
  * @access  Public
