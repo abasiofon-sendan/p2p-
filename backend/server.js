@@ -1,9 +1,8 @@
-// Load environment variables
-//const dotenvResult = require('dotenv').config();
-//if (dotenvResult.error) {
-    //console.error('Error loading .env file:', dotenvResult.error);
-    //process.exit(1);
-//}
+const dotenvResult = require('dotenv').config();
+if (dotenvResult.error) {
+    console.error('Error loading .env file:', dotenvResult.error);
+    process.exit(1);
+}
 
 const express = require('express');
 const cors = require('cors');

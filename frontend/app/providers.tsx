@@ -130,17 +130,11 @@ export function Providers({ children }: { children: ReactNode }) {
           const walletAddress = accounts[0];
           
           // Authenticate with the backend
-          const response = await apiFetch(`/api/users/auth`, {
+          const data = await apiFetch(`/api/users/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress }),
           });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Authentication failed');
-          }
 
           dispatch({ type: "SET_USER", payload: data.user });
           // Save user to localStorage
@@ -176,12 +170,7 @@ export function Providers({ children }: { children: ReactNode }) {
       if (!walletAddress) return
       dispatch({ type: "SET_LOADING", payload: true })
       try {
-        const response = await apiFetch(`/api/users/dashboard/${walletAddress}`)
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.message || "Failed to fetch dashboard data")
-        }
+        const data = await apiFetch(`/api/users/dashboard/${walletAddress}`)
 
         dispatch({ type: "SET_DASHBOARD_DATA", payload: data })
         // Optionally update walletBalance in user and localStorage if needed
