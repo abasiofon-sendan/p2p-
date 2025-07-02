@@ -4,6 +4,7 @@ import type React from "react"
 import { useReducer, createContext, useContext, type ReactNode, useCallback, useEffect } from "react"
 import { useToast } from "@/components/ui/use-toast"
 import { env } from "process"
+import { apiFetch } from "@/utils/api"
 
 // Define types for our state
 interface User {
@@ -56,7 +57,7 @@ type AppAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_DASHBOARD_DATA"; payload: DashboardData }
 
-  const BASE_URL = env.BASE_URL || "http://localhost:5000"
+  const BASE_URL = env.NEXT_PUBLIC_BASE_URL || "http://localhost:5000"
 
 const initialState: AppState = {
   isAuthenticated: false,
@@ -125,7 +126,7 @@ export function Providers({ children }: { children: ReactNode }) {
           const walletAddress = accounts[0];
           
           // Authenticate with the backend
-          const response = await fetch(`${BASE_URL}/api/users/auth`, {
+          const response = await apiFetch(`/api/users/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress }),
@@ -170,7 +171,7 @@ export function Providers({ children }: { children: ReactNode }) {
       if (!walletAddress) return
       dispatch({ type: "SET_LOADING", payload: true })
       try {
-        const response = await fetch(`${BASE_URL}/api/users/dashboard/${walletAddress}`)
+        const response = await apiFetch(`/api/users/dashboard/${walletAddress}`)
         const data = await response.json()
 
         if (!response.ok) {
