@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const EscrowSchema = new mongoose.Schema({
     escrowId: {
         type: String,
-        // required: true, // Temporarily disable until contract interaction is built
-        // unique: true,
+        unique: true,
+        sparse: true, // This is the fix!
     },
     order: {
         type: mongoose.Schema.Types.ObjectId,

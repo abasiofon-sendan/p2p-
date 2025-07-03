@@ -244,4 +244,65 @@ router.put('/:orderId/status', async (req, res) => {
     }
 });
 
+/**
+ * @route   POST /api/orders
+ * @desc    Deprecated: Create a new order (sell) - primarily for admin or off-chain processes
+ * @body    { 
+ *   "sellerAddress": "0x...", 
+ *   "asset": "USDT|USDC", 
+ *   "amount": 100, 
+ *   "rate": 1.00,
+ *   "minLimit": 10,
+ *   "maxLimit": 1000,
+ *   "paymentMethods": ["Bank Transfer"]
+ * }
+ * @access  Private (requires user to be authenticated)
+ */
+router.post('/', async (req, res) => {
+    // NOTE: This endpoint is now primarily for off-chain data or for a future admin-driven process.
+    // The primary method for order creation should be driven by the frontend interacting directly with the smart contract.
+    // The backend should listen for 'OrderCreated' events from the smart contract to save data.
+
+    try {
+        const { sellerAddress, asset, amount, rate, minLimit, maxLimit, paymentMethods } = req.body;
+
+        // Basic validation
+        if (!sellerAddress || !asset || !amount || !rate) {
+            return res.status(400).json({ message: 'Missing required fields for order creation.' });
+        }
+
+        const seller = await User.findOne({ walletAddress: sellerAddress.toLowerCase() });
+        if (!seller) {
+            return res.status(404).json({ message: 'Seller not found.' });
+        }
+
+        // This part would be triggered by a blockchain event listener in a full implementation.
+        // For now, we allow this endpoint to create the DB record, but acknowledge it's a temporary step.
+        const newOrder = new Order({
+            seller: seller._id,
+            orderType: 'sell', // Assuming this route is for sell orders
+            asset,
+            amount,
+            rate,
+            minLimit,
+            maxLimit,
+            paymentMethods,
+            status: 'active', // Or 'pending' until confirmed on-chain
+        });
+
+        await newOrder.save();
+
+        console.log('✅ Order saved to database (simulating event listener):', newOrder._id);
+
+        res.status(201).json({
+            message: "Order recorded in DB. Awaiting blockchain confirmation.",
+            order: newOrder
+        });
+
+    } catch (error) {
+        console.error('Order creation failed:', error);
+        res.status(500).json({ message: 'Internal Server Error', error: error.message });
+    }
+});
+
 module.exports = router;

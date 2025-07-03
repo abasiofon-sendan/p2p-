@@ -4,8 +4,10 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useApp } from "@/app/providers"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ethers } from "ethers"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -13,14 +15,26 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, AlertCircle, Building2 } from "lucide-react"
 import Link from "next/link"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { useToast } from "@/hooks/use-toast"
 import { apiFetch } from "@/utils/api"
+
+// --- Import ABIs ---
+// Make sure these paths are correct relative to your project structure.
+// You might need to copy these JSON files to your frontend directory.
+import OrderManagerABI from "../../../backend/abis/OrderManager.json"
+import MockUSDTABI from "../../../backend/abis/MockUSDT.json"
+
+// --- Contract Addresses ---
+// Replace with your actual deployed contract addresses
+const ORDER_MANAGER_ADDRESS = "0x0482d4E535822ABAF880D94A2ED39c8bDb175e73" // Example address
+const MOCK_USDT_ADDRESS = "0x2Acf01d403bDf988f58E645fBAd37E3D270dB307"   // Example address
+
 
 export default function PlaceOrderPage() {
   const { state } = useApp()
   const router = useRouter()
   const { toast } = useToast()
+
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy")
   const [currency, setCurrency] = useState<"USDT" | "USDC">("USDT")
   const [amount, setAmount] = useState("")
@@ -126,6 +140,67 @@ export default function PlaceOrderPage() {
       toast({
         title: "Order Creation Failed",
         description: error.message || "An error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!state.user || !amount || !rate) {
+      toast({ title: "Missing Information", description: "Please fill out all required fields.", variant: "destructive" })
+      return
+    }
+    if (typeof window.ethereum === "undefined") {
+      toast({ title: "MetaMask Not Found", description: "Please install MetaMask to create an order.", variant: "destructive" })
+      return
+    }
+
+    setIsLoading(true)
+    toast({ title: "Processing...", description: "Please follow the prompts in your wallet." })
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+
+      const usdtContract = new ethers.Contract(MOCK_USDT_ADDRESS, MockUSDTABI.abi, signer)
+      const orderManagerContract = new ethers.Contract(ORDER_MANAGER_ADDRESS, OrderManagerABI.abi, signer)
+
+      const amountInSmallestUnit = ethers.parseUnits(amount, 6)
+      const rateInSmallestUnit = ethers.parseUnits(rate, 6)
+      const minLimitInSmallestUnit = ethers.parseUnits(minLimit || "0", 6)
+      const maxLimitInSmallestUnit = ethers.parseUnits(maxLimit || amount, 6)
+
+      toast({ title: "Step 1: Approve", description: "Please approve the token transfer in your wallet." })
+      const approvalTx = await usdtContract.approve(ORDER_MANAGER_ADDRESS, amountInSmallestUnit)
+      await approvalTx.wait()
+      toast({ title: "Approval Successful!", variant: "default" })
+
+      toast({ title: "Step 2: Create Order", description: "Please confirm the transaction to create the order." })
+      const createOrderTx = await orderManagerContract.createOrder(
+        MOCK_USDT_ADDRESS,
+        amountInSmallestUnit,
+        rateInSmallestUnit,
+        minLimitInSmallestUnit,
+        maxLimitInSmallestUnit
+      )
+      await createOrderTx.wait()
+
+      toast({
+        title: "Order Created Successfully!",
+        description: "Your order is now live on the blockchain.",
+      })
+
+      router.push("/dashboard")
+
+    } catch (error) {
+      const err = error as any
+      console.error("Order creation failed:", err)
+      toast({
+        title: "Transaction Failed",
+        description: err.reason || err.message || "An unknown error occurred.",
         variant: "destructive",
       })
     } finally {
