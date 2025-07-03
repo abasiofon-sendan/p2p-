@@ -22,7 +22,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: "Orders", href: "/orders", icon: TrendingUp },
     { name: "Create Order", href: "/place-order", icon: Plus },
     { name: "Disputes", href: "/disputes", icon: MessageSquare },
-    { name: "Settings", href: "/settings", icon: Settings },
+    // { name: "Settings", href: "/settings", icon: Settings },
   ]
 
   const adminNavigation = [{ name: "Admin Dashboard", href: "/admin/dashboard", icon: Shield }]
