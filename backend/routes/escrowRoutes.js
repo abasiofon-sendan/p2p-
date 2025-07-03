@@ -1,11 +1,73 @@
 const express = require('express');
 const { ethers } = require('ethers');
-const { escrowContract, signer } = require('../services/blockchainService');
+const crypto = require('crypto'); // Import the crypto module
 const Escrow = require('../models/Escrow');
 const Order = require('../models/Order');
 const User = require('../models/User');
+const { getSigner, getProvider, orderManager, mockUSDT } = require('../services/blockchainService');
 
 const router = express.Router();
+
+/**
+ * @route   POST /api/escrows
+ * @desc    Create a new escrow for a trade
+ * @access  Private (needs auth)
+ */
+router.post('/', async (req, res) => {
+    try {
+        // We'll need to get the buyer's address from an auth middleware in the future
+        // For now, let's assume it's passed in the body for testing
+        const { orderId, amount, buyerAddress } = req.body;
+
+        if (!orderId || !amount || !buyerAddress) {
+            return res.status(400).json({ message: 'Missing required fields: orderId, amount, and buyerAddress are required.' });
+        }
+
+        const order = await Order.findById(orderId).populate('seller');
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const buyer = await User.findOne({ walletAddress: buyerAddress.toLowerCase() });
+        if (!buyer) {
+            return res.status(404).json({ message: 'Buyer not found' });
+        }
+
+        const amountInWei = ethers.parseUnits(amount.toString(), 6); // Assuming 6 decimals for MockUSDT
+
+        // TODO: Interact with the smart contract to create the escrow on-chain
+        // For now, we will just create it in the database
+
+        const newEscrow = new Escrow({
+            order: order._id,
+            amount: amount.toString(),
+            fiatAmount: parseFloat(amount) * order.rate, // Calculate fiat amount
+            seller: order.seller.walletAddress,
+            buyer: buyer.walletAddress,
+            status: 'Active',
+        });
+
+        await newEscrow.save();
+
+        // Populate the order details for the response
+        const populatedEscrow = await Escrow.findById(newEscrow._id).populate({
+            path: 'order',
+            populate: {
+                path: 'seller',
+                model: 'User',
+                select: 'walletAddress fullName'
+            }
+        });
+
+
+        res.status(201).json(populatedEscrow);
+
+    } catch (error) {
+        console.error('Failed to create escrow:', error);
+        res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+});
+
 
 /**
  * @route   GET /api/escrows/by-order/:orderId
@@ -255,67 +317,47 @@ router.post('/:id/resolve-dispute', async (req, res) => {
         // resolution should be 'awarded_to_buyer' or 'awarded_to_seller'
         
         if (!resolution || !['awarded_to_buyer', 'awarded_to_seller'].includes(resolution)) {
-            return res.status(400).json({ 
-                message: 'resolution must be either "awarded_to_buyer" or "awarded_to_seller"' 
-            });
+            return res.status(400).json({ message: 'Invalid resolution type' });
         }
 
         const escrow = await Escrow.findById(req.params.id);
-        
-        if (!escrow) {
-            return res.status(404).json({ message: 'Escrow not found' });
-        }
-
+        if (!escrow) return res.status(404).json({ message: 'Escrow not found' });
         if (escrow.status !== 'Disputed') {
-            return res.status(400).json({ 
-                message: 'Can only resolve disputed trades' 
-            });
+            return res.status(400).json({ message: 'Can only resolve active disputes' });
         }
 
-        // Update escrow with resolution
-        escrow.disputeResolution = resolution;
-        escrow.disputeResolvedBy = adminAddress || 'admin';
-        escrow.disputeResolvedAt = new Date();
-        escrow.status = 'Completed'; // Mark as completed regardless of outcome
-        
-        // Add admin message to dispute log
-        if (adminReason) {
-            escrow.disputeMessages.push({
-                from: 'admin',
-                message: `RESOLUTION: ${adminReason}`,
-                timestamp: new Date()
-            });
+        // --- BLOCKCHAIN INTERACTION ---
+        // In a real app, this is where you'd call the smart contract to award the funds.
+        // For now, we simulate it.
+        if (resolution === 'awarded_to_buyer') {
+            console.log(`MOCK: Admin awarding escrow ${escrow._id} to buyer ${escrow.buyer}`);
+            // const tx = await escrowContract.awardToBuyer(escrow.escrowId);
+            // await tx.wait();
+            // escrow.transactionHash = tx.hash;
+        } else {
+            console.log(`MOCK: Admin awarding escrow ${escrow._id} to seller ${escrow.seller}`);
+            // const tx = await escrowContract.awardToSeller(escrow.escrowId);
+            // await tx.wait();
+            // escrow.transactionHash = tx.hash;
         }
+        // --- END MOCK ---
 
+        escrow.status = resolution === 'awarded_to_buyer' ? 'Completed' : 'Cancelled';
+        escrow.resolution = resolution;
+        escrow.resolvedAt = new Date();
+        escrow.adminAddress = adminAddress;
+        escrow.adminReason = adminReason;
         await escrow.save();
 
-        // Update reputation based on outcome
+        // Update user stats
         if (resolution === 'awarded_to_buyer') {
-            // Buyer wins - penalize seller
-            await User.findOneAndUpdate(
-                { walletAddress: escrow.seller }, 
-                { $inc: { reputation: -0.5 } } // Decrease seller reputation
-            );
-            await User.findOneAndUpdate(
-                { walletAddress: escrow.buyer }, 
-                { $inc: { completedTrades: 1 } }
-            );
-            console.log(`✅ Dispute resolved in favor of buyer. Crypto released to ${escrow.buyer}`);
+            await User.findOneAndUpdate({ walletAddress: escrow.buyer }, { $inc: { completedTrades: 1 } });
         } else {
-            // Seller wins - penalize buyer
-            await User.findOneAndUpdate(
-                { walletAddress: escrow.buyer }, 
-                { $inc: { reputation: -0.5 } } // Decrease buyer reputation
-            );
-            await User.findOneAndUpdate(
-                { walletAddress: escrow.seller }, 
-                { $inc: { completedTrades: 1 } }
-            );
-            console.log(`✅ Dispute resolved in favor of seller. Crypto returned to ${escrow.seller}`);
+            await User.findOneAndUpdate({ walletAddress: escrow.seller }, { $inc: { completedTrades: 1 } });
         }
 
         res.status(200).json({
-            message: `Dispute resolved in favor of ${resolution.includes('buyer') ? 'buyer' : 'seller'}`,
+            message: `Dispute resolved successfully. ${resolution === 'awarded_to_buyer' ? 'Buyer' : 'Seller'} awarded.`,
             escrow
         });
 

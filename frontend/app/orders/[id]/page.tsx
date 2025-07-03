@@ -133,7 +133,10 @@ export default function TradeRoomPage() {
   // --- ACTION HANDLERS ---
 
   const handleInitiateTrade = async () => {
-    if (!order || !tradeAmount) return;
+    if (!order || !tradeAmount || !state.user) {
+      toast({ title: "Cannot Initiate Trade", description: "Missing order details or user session.", variant: "destructive" });
+      return;
+    }
 
     const amount = parseFloat(tradeAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -153,6 +156,7 @@ export default function TradeRoomPage() {
         body: JSON.stringify({
           orderId: order._id,
           amount: tradeAmount,
+          buyerAddress: state.user.walletAddress, // Send the buyer's address
         }),
       });
       setEscrow(newEscrow);
