@@ -91,30 +91,42 @@ router.get('/dashboard/:walletAddress', async (req, res) => {
         };
 
         // 3. Fetch recent transactions from DB
-        const recentTransactions = await Escrow.find({
+        const recentEscrows = await Escrow.find({
             $or: [{ seller: lowercasedAddress }, { buyer: lowercasedAddress }]
         })
         .sort({ createdAt: -1 })
-        .limit(10);
+        .limit(10)
+        .populate({
+            path: 'order',
+            select: 'asset' 
+        });
+
+        // Filter out escrows where the order might have been deleted or is otherwise missing
+        const validEscrows = recentEscrows.filter(escrow => escrow.order);
+
+        const recentTransactions = validEscrows.map(escrow => ({
+            id: escrow._id.toString(),
+            type: escrow.seller.toLowerCase() === lowercasedAddress ? 'sell' : 'buy',
+            currency: escrow.order.asset, // Now safe to access .asset
+            amount: parseFloat(escrow.amount),
+            status: escrow.status,
+            date: escrow.createdAt,
+            counterparty: escrow.seller.toLowerCase() === lowercasedAddress ? escrow.buyer : escrow.seller,
+        }));
+
 
         // 4. Assemble and send dashboard data
-        res.status(200).json({
+        const dashboardData = {
             stats: {
                 rating: user.reputation || 0,
                 completedTrades: user.completedTrades || 0,
                 kycStatus: user.kycStatus || 'unverified',
             },
             balances,
-            recentTransactions: recentTransactions.map(tx => ({
-                id: tx.escrowId.toString(),
-                type: tx.seller.toLowerCase() === lowercasedAddress ? 'sell' : 'buy',
-                currency: 'USDT', // Assuming USDT for now
-                amount: parseFloat(tx.amount),
-                status: tx.status, // Virtual field from Escrow model
-                date: tx.createdAt.toISOString().split('T')[0],
-                counterparty: tx.seller.toLowerCase() === lowercasedAddress ? tx.buyer : tx.seller,
-            })),
-        });
+            recentTransactions,
+        };
+
+        res.status(200).json(dashboardData);
 
     } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
